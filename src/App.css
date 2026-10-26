@@ -335,3 +335,66 @@ a {
     margin-top: 22px;
   }
 }
+
+
+/* Navigation authentication buttons */
+.auth-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-buttons span {
+  color: #2b2024;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auth-buttons button {
+  padding: 10px 22px;
+  border: 1px solid #b76e79;
+  border-radius: 10px;
+  background: #b76e79;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-buttons button:hover {
+  background: #9a5862;
+  border-color: #9a5862;
+  transform: translateY(-1px);
+}
+
+.auth-buttons button:active {
+  transform: translateY(0);
+}
+
+.auth-buttons button:focus-visible {
+  outline: 3px solid #e8c07d;
+  outline-offset: 3px;
+}
+
+/* Register and Login form spacing */
+.form-section {
+  margin-top: 28px;
+}
+
+@media (max-width: 600px) {
+  .navbar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .auth-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .auth-buttons button {
+    padding: 9px 16px;
+  }
+}
+

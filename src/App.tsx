@@ -29,6 +29,25 @@ const emptyForm = {
 
 function App() {
   const [items, setItems] = useState<Item[]>([]);
+  
+const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
+
+const [authForm, setAuthForm] = useState({
+  name: "",
+  email: "",
+  password: "",
+});
+
+const [authMessage, setAuthMessage] = useState("");
+const [authLoading, setAuthLoading] = useState(false);
+
+const [currentUser, setCurrentUser] = useState<{
+  userId: string;
+  name: string;
+  email: string;
+  token: string;
+} | null>(null);
+
   const [filter, setFilter] = useState<"ALL" | "LOST" | "FOUND">("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -95,13 +114,52 @@ function App() {
 
   return (
     <main className="app">
-      <header className="navbar">
-        <a className="brand" href="/">
-          <span className="brand-icon">🔎</span>
-          FindIt
-        </a>
-        <span className="nav-label">Smart Lost & Found</span>
-      </header>
+      
+<header className="navbar">
+  <a className="brand" href="/">
+    <span className="brand-icon">🔎</span>
+    FindIt
+  </a>
+
+  <div className="nav-label">Smart Lost & Found</div>
+
+  <div className="auth-buttons">
+    {currentUser ? (
+      <>
+        <span>Hi, {currentUser.name}</span>
+        <button
+          type="button"
+          onClick={() => setCurrentUser(null)}
+        >
+          Logout
+        </button>
+      </>
+    ) : (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthMode("login");
+            setAuthMessage("");
+          }}
+        >
+          Login
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setAuthMode("register");
+            setAuthMessage("");
+          }}
+        >
+          Register
+        </button>
+      </>
+    )}
+  </div>
+</header>
+
 
       <section className="hero">
         <span className="eyebrow">LOST SOMETHING? FOUND SOMETHING?</span>
@@ -135,6 +193,165 @@ function App() {
           </button>
         </div>
       </section>
+      
+{authMode && (
+  <section className="form-section">
+    <div className="form-heading">
+      <div>
+        <span className="eyebrow">WELCOME TO FINDIT</span>
+        <h2>{authMode === "register" ? "Create Account" : "Login"}</h2>
+      </div>
+
+      <button
+        type="button"
+        className="close-button"
+        onClick={() => setAuthMode(null)}
+      >
+        ✕
+      </button>
+    </div>
+
+    <form
+      className="item-form"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setAuthLoading(true);
+        setAuthMessage("");
+
+        try {
+          const response = await fetch(
+            `http://localhost:5000/api/auth/${authMode}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(authForm),
+            }
+          );
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.message || "Authentication failed.");
+          }
+
+          let data = result.data;
+
+          if (authMode === "register") {
+            const loginResponse = await fetch(
+              "http://localhost:5000/api/auth/login",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  email: authForm.email,
+                  password: authForm.password,
+                }),
+              }
+            );
+
+            const loginResult = await loginResponse.json();
+
+            if (!loginResponse.ok) {
+              throw new Error(loginResult.message || "Please login.");
+            }
+
+            data = loginResult.data;
+          }
+
+          setCurrentUser({
+            userId: data.userId,
+            name: data.name,
+            email: data.email,
+            token: data.token,
+          });
+
+          setForm((previous) => ({
+            ...previous,
+            userId: data.userId,
+          }));
+
+          setAuthMode(null);
+          setAuthForm({ name: "", email: "", password: "" });
+          setNotice(`Welcome, ${data.name}!`);
+        } catch (err) {
+          setAuthMessage(
+            err instanceof Error ? err.message : "Something went wrong."
+          );
+        } finally {
+          setAuthLoading(false);
+        }
+      }}
+    >
+      {authMode === "register" && (
+        <label>
+          Full Name
+          <input
+            required
+            value={authForm.name}
+            onChange={(e) =>
+              setAuthForm({ ...authForm, name: e.target.value })
+            }
+            placeholder="Enter your name"
+          />
+        </label>
+      )}
+
+      <label>
+        Email
+        <input
+          required
+          type="email"
+          value={authForm.email}
+          onChange={(e) =>
+            setAuthForm({ ...authForm, email: e.target.value })
+          }
+          placeholder="Enter your email"
+        />
+      </label>
+
+      <label>
+        Password
+        <input
+          required
+          type="password"
+          minLength={6}
+          value={authForm.password}
+          onChange={(e) =>
+            setAuthForm({ ...authForm, password: e.target.value })
+          }
+          placeholder="At least 6 characters"
+        />
+      </label>
+
+      {authMessage && (
+        <p className="message error">{authMessage}</p>
+      )}
+
+      <div className="form-actions">
+        <button
+          type="button"
+          className="cancel-button"
+          onClick={() => setAuthMode(null)}
+        >
+          Cancel
+        </button>
+
+        <button
+          type="submit"
+          className="submit-button"
+          disabled={authLoading}
+        >
+          {authLoading
+            ? "Please wait..."
+            : authMode === "register"
+              ? "Create Account"
+              : "Login"}
+        </button>
+      </div>
+    </form>
+  </section>
+)}
+
 
       {notice && (
         <div className="notice" role="status">
