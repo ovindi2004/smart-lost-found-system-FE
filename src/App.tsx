@@ -49,6 +49,8 @@ const [currentUser, setCurrentUser] = useState<{
 } | null>(null);
 
   const [filter, setFilter] = useState<"ALL" | "LOST" | "FOUND">("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -75,10 +77,20 @@ const [currentUser, setCurrentUser] = useState<{
     void loadItems();
   }, []);
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setNotice("");
-    setSaving(true);
+  
+const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
+  setNotice("");
+
+  if (!currentUser) {
+    setNotice("Please login before reporting an item.");
+    setShowForm(false);
+    setAuthMode("login");
+    return;
+  }
+
+  setSaving(true);
+
 
     try {
       const response = await fetch("http://localhost:5000/api/items", {
@@ -107,10 +119,24 @@ const [currentUser, setCurrentUser] = useState<{
     }
   };
 
-  const filteredItems =
-    filter === "ALL"
-      ? items
-      : items.filter((item) => item.itemType === filter);
+  
+const filteredItems = items.filter((item) => {
+  const matchesFilter =
+    filter === "ALL" || item.itemType === filter;
+
+  const query = searchTerm.trim().toLowerCase();
+
+  const matchesSearch =
+    item.title.toLowerCase().includes(query) ||
+    item.location.toLowerCase().includes(query) ||
+    item.category.toLowerCase().includes(query);
+
+  const matchesCategory =
+  categoryFilter === "ALL" || item.category === categoryFilter;
+
+return matchesFilter && matchesSearch && matchesCategory;
+});
+
 
   return (
     <main className="app">
@@ -506,21 +532,19 @@ const [currentUser, setCurrentUser] = useState<{
               />
             </label>
 
-            <label>
-              User ID
-              <input
-                required
-                value={form.userId}
-                onChange={(e) =>
-                  setForm({ ...form, userId: e.target.value })
-                }
-                placeholder="MongoDB user ID"
-              />
-              <small>
-                A registered user's MongoDB ID is required. We will add
-                registration and login next.
-              </small>
-            </label>
+            
+{!currentUser && (
+  <p className="message">
+    Please register or login before reporting an item.
+  </p>
+)}
+
+{currentUser && (
+  <p className="message">
+    Reporting as: {currentUser.name}
+  </p>
+)}
+
 
             <div className="form-actions">
               <button
@@ -547,6 +571,45 @@ const [currentUser, setCurrentUser] = useState<{
           </div>
           <span className="item-count">{items.length} items</span>
         </div>
+         
+<div className="search-box">
+  <span>🔎</span>
+  <input
+    type="text"
+    placeholder="Search by item name, location, or category..."
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+  />
+  {searchTerm && (
+    <button
+      type="button"
+      onClick={() => setSearchTerm("")}
+      aria-label="Clear search"
+    >
+      ✕
+    </button>
+  )}
+</div>
+
+<div className="category-filter">
+  <label htmlFor="categoryFilter">Category:</label>
+  <select
+    id="categoryFilter"
+    value={categoryFilter}
+    onChange={(e) => setCategoryFilter(e.target.value)}
+  >
+    <option value="ALL">All Categories</option>
+    <option value="Electronics">Electronics</option>
+    <option value="Bags">Bags</option>
+    <option value="Documents">Documents</option>
+    <option value="Keys">Keys</option>
+    <option value="Clothing">Clothing</option>
+    <option value="Jewelry">Jewelry</option>
+    <option value="Pets">Pets</option>
+    <option value="Other">Other</option>
+  </select>
+</div>
+
 
         <div className="filters">
           {(["ALL", "LOST", "FOUND"] as const).map((value) => (
