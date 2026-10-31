@@ -12,8 +12,14 @@ interface Item {
   date: string;
   image?: string;
   status: string;
+  userId:
+    | string
+    | {
+        _id: string;
+        name: string;
+        email: string;
+      };
 }
-
 
 const emptyForm = {
   title: "",
@@ -26,48 +32,64 @@ const emptyForm = {
   image: "",
 };
 
-
 function App() {
   const [items, setItems] = useState<Item[]>([]);
-  
-const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
 
-const [authForm, setAuthForm] = useState({
-  name: "",
-  email: "",
-  password: "",
-});
+  const [authMode, setAuthMode] = useState<
+    "login" | "register" | null
+  >(null);
 
-const [authMessage, setAuthMessage] = useState("");
-const [authLoading, setAuthLoading] = useState(false);
+  const [authForm, setAuthForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
 
-const [currentUser, setCurrentUser] = useState<{
-  userId: string;
-  name: string;
-  email: string;
-  token: string;
-} | null>(null);
+  const [authMessage, setAuthMessage] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
 
-  const [filter, setFilter] = useState<"ALL" | "LOST" | "FOUND">("ALL");
+  const [currentUser, setCurrentUser] = useState<{
+    userId: string;
+    name: string;
+    email: string;
+    token: string;
+  } | null>(null);
+
+  const [filter, setFilter] = useState<
+    "ALL" | "LOST" | "FOUND"
+  >("ALL");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
-  const [form, setForm] = useState(emptyForm);
 
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Load all items
   const loadItems = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/items");
-      if (!response.ok) throw new Error("Could not load items");
+      const response = await fetch(
+        "http://localhost:5000/api/items"
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not load items");
+      }
 
       const result = await response.json();
+
       setItems(result.data);
       setError("");
     } catch {
-      setError("Could not connect to the server. Please try again.");
+      setError(
+        "Could not connect to the server. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -77,140 +99,241 @@ const [currentUser, setCurrentUser] = useState<{
     void loadItems();
   }, []);
 
-  
-const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-  event.preventDefault();
-  setNotice("");
+  // Edit item
+  const handleEdit = (item: Item) => {
+    setForm({
+      title: item.title,
+      description: item.description,
+      category: item.category,
+      itemType: item.itemType,
+      location: item.location,
+      date: item.date.slice(0, 10),
+      userId: currentUser?.userId || "",
+      image: item.image || "",
+    });
 
-  if (!currentUser) {
-    setNotice("Please login before reporting an item.");
-    setShowForm(false);
-    setAuthMode("login");
-    return;
-  }
+    setEditingId(item._id);
+    setShowForm(true);
+    setNotice("");
+  };
 
-  setSaving(true);
+  // Delete item
+  const handleDelete = async (id: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this item?"
+    );
 
+    if (!confirmed) return;
 
     try {
-      const response = await fetch("http://localhost:5000/api/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+      const response = await fetch(
+        `http://localhost:5000/api/items/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to delete item."
+        );
+      }
+
+      setNotice("Item deleted successfully!");
+
+      await loadItems();
+    } catch (err) {
+      setNotice(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong."
+      );
+    }
+  };
+
+  // Create or update item
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    setNotice("");
+
+    if (!currentUser) {
+      setNotice("Please login before reporting an item.");
+      setShowForm(false);
+      setAuthMode("login");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const itemData = {
+        ...form,
+        userId: currentUser.userId,
+      };
+
+      const url = editingId
+        ? `http://localhost:5000/api/items/${editingId}`
+        : "http://localhost:5000/api/items";
+
+      const response = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(itemData),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to report item.");
+        throw new Error(
+          result.message || "Failed to save item."
+        );
       }
 
-      setNotice("Item reported successfully!");
+      setNotice(
+        editingId
+          ? "Item updated successfully!"
+          : "Item reported successfully!"
+      );
+
       setForm(emptyForm);
+      setEditingId(null);
       setShowForm(false);
-      setLoading(true);
+
       await loadItems();
     } catch (err) {
       setNotice(
-        err instanceof Error ? err.message : "Something went wrong."
+        err instanceof Error
+          ? err.message
+          : "Something went wrong."
       );
     } finally {
       setSaving(false);
     }
   };
 
-  
-const filteredItems = items.filter((item) => {
-  const matchesFilter =
-    filter === "ALL" || item.itemType === filter;
+  // Search and filter
+  const filteredItems = items.filter((item) => {
+    const matchesFilter =
+      filter === "ALL" || item.itemType === filter;
 
-  const query = searchTerm.trim().toLowerCase();
+    const query = searchTerm.trim().toLowerCase();
 
-  const matchesSearch =
-    item.title.toLowerCase().includes(query) ||
-    item.location.toLowerCase().includes(query) ||
-    item.category.toLowerCase().includes(query);
+    const matchesSearch =
+      item.title.toLowerCase().includes(query) ||
+      item.location.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query);
 
-  const matchesCategory =
-  categoryFilter === "ALL" || item.category === categoryFilter;
+    const matchesCategory =
+      categoryFilter === "ALL" ||
+      item.category === categoryFilter;
 
-return matchesFilter && matchesSearch && matchesCategory;
-});
-
+    return (
+      matchesFilter &&
+      matchesSearch &&
+      matchesCategory
+    );
+  });
 
   return (
     <main className="app">
-      
-<header className="navbar">
-  <a className="brand" href="/">
-    <span className="brand-icon">🔎</span>
-    FindIt
-  </a>
 
-  <div className="nav-label">Smart Lost & Found</div>
+      {/* Navigation */}
+      <header className="navbar">
+        <a className="brand" href="/">
+          <span className="brand-icon">🔎</span>
+          FindIt
+        </a>
 
-  <div className="auth-buttons">
-    {currentUser ? (
-      <>
-        <span>Hi, {currentUser.name}</span>
-        <button
-          type="button"
-          onClick={() => setCurrentUser(null)}
-        >
-          Logout
-        </button>
-      </>
-    ) : (
-      <>
-        <button
-          type="button"
-          onClick={() => {
-            setAuthMode("login");
-            setAuthMessage("");
-          }}
-        >
-          Login
-        </button>
+        <div className="nav-label">
+          Smart Lost & Found
+        </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setAuthMode("register");
-            setAuthMessage("");
-          }}
-        >
-          Register
-        </button>
-      </>
-    )}
-  </div>
-</header>
+        <div className="auth-buttons">
+          {currentUser ? (
+            <>
+              <span>Hi, {currentUser.name}</span>
 
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentUser(null);
+                  setNotice("Logged out successfully!");
+                }}
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("login");
+                  setAuthMessage("");
+                }}
+              >
+                Login
+              </button>
 
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("register");
+                  setAuthMessage("");
+                }}
+              >
+                Register
+              </button>
+            </>
+          )}
+        </div>
+      </header>
+
+      {/* Hero Section */}
       <section className="hero">
-        <span className="eyebrow">LOST SOMETHING? FOUND SOMETHING?</span>
+        <span className="eyebrow">
+          LOST SOMETHING? FOUND SOMETHING?
+        </span>
+
         <h1>
           Lost it? <span>Let's find it.</span>
         </h1>
+
         <p>
           Help bring someone's precious belongings back home.
           Report lost or found items and explore community reports.
         </p>
+
         <div className="hero-actions">
           <button
             className="hero-button"
             onClick={() => {
-              setForm({ ...emptyForm, itemType: "LOST" });
+              setEditingId(null);
+              setForm({
+                ...emptyForm,
+                itemType: "LOST",
+              });
               setShowForm(true);
               setNotice("");
             }}
           >
             + Report Lost Item
           </button>
+
           <button
             className="hero-button secondary"
             onClick={() => {
-              setForm({ ...emptyForm, itemType: "FOUND" });
+              setEditingId(null);
+              setForm({
+                ...emptyForm,
+                itemType: "FOUND",
+              });
               setShowForm(true);
               setNotice("");
             }}
@@ -219,197 +342,257 @@ return matchesFilter && matchesSearch && matchesCategory;
           </button>
         </div>
       </section>
-      
-{authMode && (
-  <section className="form-section">
-    <div className="form-heading">
-      <div>
-        <span className="eyebrow">WELCOME TO FINDIT</span>
-        <h2>{authMode === "register" ? "Create Account" : "Login"}</h2>
-      </div>
 
-      <button
-        type="button"
-        className="close-button"
-        onClick={() => setAuthMode(null)}
-      >
-        ✕
-      </button>
-    </div>
+      {/* Login / Register */}
+      {authMode && (
+        <section className="form-section">
+          <div className="form-heading">
+            <div>
+              <span className="eyebrow">
+                WELCOME TO FINDIT
+              </span>
 
-    <form
-      className="item-form"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setAuthLoading(true);
-        setAuthMessage("");
+              <h2>
+                {authMode === "register"
+                  ? "Create Account"
+                  : "Login"}
+              </h2>
+            </div>
 
-        try {
-          const response = await fetch(
-            `http://localhost:5000/api/auth/${authMode}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(authForm),
-            }
-          );
+            <button
+              type="button"
+              className="close-button"
+              onClick={() => setAuthMode(null)}
+            >
+              ✕
+            </button>
+          </div>
 
-          const result = await response.json();
+          <form
+            className="item-form"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setAuthLoading(true);
+              setAuthMessage("");
 
-          if (!response.ok) {
-            throw new Error(result.message || "Authentication failed.");
-          }
+              try {
+                const response = await fetch(
+                  `http://localhost:5000/api/auth/${authMode}`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(authForm),
+                  }
+                );
 
-          let data = result.data;
+                const result = await response.json();
 
-          if (authMode === "register") {
-            const loginResponse = await fetch(
-              "http://localhost:5000/api/auth/login",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  email: authForm.email,
-                  password: authForm.password,
-                }),
+                if (!response.ok) {
+                  throw new Error(
+                    result.message ||
+                    "Authentication failed."
+                  );
+                }
+
+                let data = result.data;
+
+                if (authMode === "register") {
+                  const loginResponse = await fetch(
+                    "http://localhost:5000/api/auth/login",
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        email: authForm.email,
+                        password: authForm.password,
+                      }),
+                    }
+                  );
+
+                  const loginResult =
+                    await loginResponse.json();
+
+                  if (!loginResponse.ok) {
+                    throw new Error(
+                      loginResult.message ||
+                      "Please login."
+                    );
+                  }
+
+                  data = loginResult.data;
+                }
+
+                setCurrentUser({
+                  userId: data.userId,
+                  name: data.name,
+                  email: data.email,
+                  token: data.token,
+                });
+
+                setForm((previous) => ({
+                  ...previous,
+                  userId: data.userId,
+                }));
+
+                setAuthMode(null);
+                setAuthForm({
+                  name: "",
+                  email: "",
+                  password: "",
+                });
+
+                setNotice(`Welcome, ${data.name}!`);
+              } catch (err) {
+                setAuthMessage(
+                  err instanceof Error
+                    ? err.message
+                    : "Something went wrong."
+                );
+              } finally {
+                setAuthLoading(false);
               }
-            );
+            }}
+          >
+            {authMode === "register" && (
+              <label>
+                Full Name
 
-            const loginResult = await loginResponse.json();
+                <input
+                  required
+                  value={authForm.name}
+                  onChange={(e) =>
+                    setAuthForm({
+                      ...authForm,
+                      name: e.target.value,
+                    })
+                  }
+                  placeholder="Enter your name"
+                />
+              </label>
+            )}
 
-            if (!loginResponse.ok) {
-              throw new Error(loginResult.message || "Please login.");
-            }
+            <label>
+              Email
 
-            data = loginResult.data;
-          }
+              <input
+                required
+                type="email"
+                value={authForm.email}
+                onChange={(e) =>
+                  setAuthForm({
+                    ...authForm,
+                    email: e.target.value,
+                  })
+                }
+                placeholder="Enter your email"
+              />
+            </label>
 
-          setCurrentUser({
-            userId: data.userId,
-            name: data.name,
-            email: data.email,
-            token: data.token,
-          });
+            <label>
+              Password
 
-          setForm((previous) => ({
-            ...previous,
-            userId: data.userId,
-          }));
+              <input
+                required
+                type="password"
+                minLength={6}
+                value={authForm.password}
+                onChange={(e) =>
+                  setAuthForm({
+                    ...authForm,
+                    password: e.target.value,
+                  })
+                }
+                placeholder="At least 6 characters"
+              />
+            </label>
 
-          setAuthMode(null);
-          setAuthForm({ name: "", email: "", password: "" });
-          setNotice(`Welcome, ${data.name}!`);
-        } catch (err) {
-          setAuthMessage(
-            err instanceof Error ? err.message : "Something went wrong."
-          );
-        } finally {
-          setAuthLoading(false);
-        }
-      }}
-    >
-      {authMode === "register" && (
-        <label>
-          Full Name
-          <input
-            required
-            value={authForm.name}
-            onChange={(e) =>
-              setAuthForm({ ...authForm, name: e.target.value })
-            }
-            placeholder="Enter your name"
-          />
-        </label>
+            {authMessage && (
+              <p className="message error">
+                {authMessage}
+              </p>
+            )}
+
+            <div className="form-actions">
+              <button
+                type="button"
+                className="cancel-button"
+                onClick={() => setAuthMode(null)}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                className="submit-button"
+                disabled={authLoading}
+              >
+                {authLoading
+                  ? "Please wait..."
+                  : authMode === "register"
+                    ? "Create Account"
+                    : "Login"}
+              </button>
+            </div>
+          </form>
+        </section>
       )}
 
-      <label>
-        Email
-        <input
-          required
-          type="email"
-          value={authForm.email}
-          onChange={(e) =>
-            setAuthForm({ ...authForm, email: e.target.value })
-          }
-          placeholder="Enter your email"
-        />
-      </label>
-
-      <label>
-        Password
-        <input
-          required
-          type="password"
-          minLength={6}
-          value={authForm.password}
-          onChange={(e) =>
-            setAuthForm({ ...authForm, password: e.target.value })
-          }
-          placeholder="At least 6 characters"
-        />
-      </label>
-
-      {authMessage && (
-        <p className="message error">{authMessage}</p>
-      )}
-
-      <div className="form-actions">
-        <button
-          type="button"
-          className="cancel-button"
-          onClick={() => setAuthMode(null)}
-        >
-          Cancel
-        </button>
-
-        <button
-          type="submit"
-          className="submit-button"
-          disabled={authLoading}
-        >
-          {authLoading
-            ? "Please wait..."
-            : authMode === "register"
-              ? "Create Account"
-              : "Login"}
-        </button>
-      </div>
-    </form>
-  </section>
-)}
-
-
+      {/* Notice */}
       {notice && (
         <div className="notice" role="status">
           {notice}
         </div>
       )}
 
+      {/* Report / Edit Form */}
       {showForm && (
         <section className="form-section">
           <div className="form-heading">
             <div>
-              <span className="eyebrow">COMMUNITY REPORT</span>
-              <h2>Report an Item</h2>
+              <span className="eyebrow">
+                COMMUNITY REPORT
+              </span>
+
+              <h2>
+                {editingId
+                  ? "Edit Item"
+                  : "Report an Item"}
+              </h2>
             </div>
+
             <button
+              type="button"
               className="close-button"
-              onClick={() => setShowForm(false)}
+              onClick={() => {
+                setShowForm(false);
+                setEditingId(null);
+                setForm(emptyForm);
+              }}
               aria-label="Close form"
             >
               ✕
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="item-form">
+          <form
+            onSubmit={handleSubmit}
+            className="item-form"
+          >
             <label>
               Report type
+
               <select
                 value={form.itemType}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    itemType: e.target.value as "LOST" | "FOUND",
+                    itemType: e.target.value as
+                      | "LOST"
+                      | "FOUND",
                   })
                 }
               >
@@ -420,11 +603,15 @@ return matchesFilter && matchesSearch && matchesCategory;
 
             <label>
               Item name
+
               <input
                 required
                 value={form.title}
                 onChange={(e) =>
-                  setForm({ ...form, title: e.target.value })
+                  setForm({
+                    ...form,
+                    title: e.target.value,
+                  })
                 }
                 placeholder="e.g. Black wallet"
               />
@@ -432,11 +619,15 @@ return matchesFilter && matchesSearch && matchesCategory;
 
             <label>
               Category
+
               <select
                 required
                 value={form.category}
                 onChange={(e) =>
-                  setForm({ ...form, category: e.target.value })
+                  setForm({
+                    ...form,
+                    category: e.target.value,
+                  })
                 }
               >
                 <option value="">Choose category</option>
@@ -453,68 +644,77 @@ return matchesFilter && matchesSearch && matchesCategory;
 
             <label>
               Description
+
               <textarea
                 required
                 rows={3}
                 value={form.description}
                 onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
+                  setForm({
+                    ...form,
+                    description: e.target.value,
+                  })
                 }
                 placeholder="Describe the item..."
               />
             </label>
 
-            
-<label>
-  Item Photo
-  <input
-    type="file"
-    accept="image/*"
-    onChange={(e) => {
-      const file = e.target.files?.[0];
+            <label>
+              Item Photo
 
-      if (file) {
-        const reader = new FileReader();
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
 
-        reader.onloadend = () => {
-          setForm((previous) => ({
-            ...previous,
-            image: reader.result as string,
-          }));
-        };
+                  if (file) {
+                    const reader = new FileReader();
 
-        reader.readAsDataURL(file);
-      }
-    }}
-  />
-  
-{form.image && (
-  <div className="photo-preview">
-    <img
-      src={form.image}
-      alt="Selected item preview"
-      style={{
-        width: "180px",
-        height: "150px",
-        objectFit: "cover",
-        borderRadius: "10px",
-        marginTop: "10px",
-      }}
-    />
-  </div>
-)}
+                    reader.onloadend = () => {
+                      setForm((previous) => ({
+                        ...previous,
+                        image: reader.result as string,
+                      }));
+                    };
 
-  <small>Upload a photo of the lost or found item.</small>
-</label>
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
 
+              {form.image && (
+                <div className="photo-preview">
+                  <img
+                    src={form.image}
+                    alt="Selected item preview"
+                    style={{
+                      width: "180px",
+                      height: "150px",
+                      objectFit: "cover",
+                      borderRadius: "10px",
+                      marginTop: "10px",
+                    }}
+                  />
+                </div>
+              )}
+
+              <small>
+                Upload a photo of the lost or found item.
+              </small>
+            </label>
 
             <label>
               Location
+
               <input
                 required
                 value={form.location}
                 onChange={(e) =>
-                  setForm({ ...form, location: e.target.value })
+                  setForm({
+                    ...form,
+                    location: e.target.value,
+                  })
                 }
                 placeholder="Where was it lost or found?"
               />
@@ -522,151 +722,260 @@ return matchesFilter && matchesSearch && matchesCategory;
 
             <label>
               Date
+
               <input
                 required
                 type="date"
                 value={form.date}
                 onChange={(e) =>
-                  setForm({ ...form, date: e.target.value })
+                  setForm({
+                    ...form,
+                    date: e.target.value,
+                  })
                 }
               />
             </label>
 
-            
-{!currentUser && (
-  <p className="message">
-    Please register or login before reporting an item.
-  </p>
-)}
+            {!currentUser && (
+              <p className="message">
+                Please register or login before reporting an item.
+              </p>
+            )}
 
-{currentUser && (
-  <p className="message">
-    Reporting as: {currentUser.name}
-  </p>
-)}
-
+            {currentUser && (
+              <p className="message">
+                Reporting as: {currentUser.name}
+              </p>
+            )}
 
             <div className="form-actions">
               <button
                 type="button"
                 className="cancel-button"
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingId(null);
+                  setForm(emptyForm);
+                }}
               >
                 Cancel
               </button>
-              <button type="submit" className="submit-button" disabled={saving}>
-                {saving ? "Submitting..." : "Submit Report"}
+
+              <button
+                type="submit"
+                className="submit-button"
+                disabled={saving}
+              >
+                {saving
+                  ? "Please wait..."
+                  : editingId
+                    ? "Update Item"
+                    : "Submit Report"}
               </button>
             </div>
           </form>
         </section>
       )}
 
+      {/* Items Section */}
       <section className="items-section" id="items">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">COMMUNITY REPORTS</span>
+            <span className="eyebrow">
+              COMMUNITY REPORTS
+            </span>
+
             <h2>Lost & Found Items</h2>
-            <p>Browse items reported by the community.</p>
+
+            <p>
+              Browse items reported by the community.
+            </p>
           </div>
-          <span className="item-count">{items.length} items</span>
+
+          <span className="item-count">
+            {items.length} items
+          </span>
         </div>
-         
-<div className="search-box">
-  <span>🔎</span>
-  <input
-    type="text"
-    placeholder="Search by item name, location, or category..."
-    value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
-  />
-  {searchTerm && (
-    <button
-      type="button"
-      onClick={() => setSearchTerm("")}
-      aria-label="Clear search"
-    >
-      ✕
-    </button>
-  )}
-</div>
 
-<div className="category-filter">
-  <label htmlFor="categoryFilter">Category:</label>
-  <select
-    id="categoryFilter"
-    value={categoryFilter}
-    onChange={(e) => setCategoryFilter(e.target.value)}
-  >
-    <option value="ALL">All Categories</option>
-    <option value="Electronics">Electronics</option>
-    <option value="Bags">Bags</option>
-    <option value="Documents">Documents</option>
-    <option value="Keys">Keys</option>
-    <option value="Clothing">Clothing</option>
-    <option value="Jewelry">Jewelry</option>
-    <option value="Pets">Pets</option>
-    <option value="Other">Other</option>
-  </select>
-</div>
+        {/* Search */}
+        <div className="search-box">
+          <span>🔎</span>
 
+          <input
+            type="text"
+            placeholder="Search by item name, location, or category..."
+            value={searchTerm}
+            onChange={(e) =>
+              setSearchTerm(e.target.value)
+            }
+          />
 
-        <div className="filters">
-          {(["ALL", "LOST", "FOUND"] as const).map((value) => (
+          {searchTerm && (
             <button
-              key={value}
-              className={filter === value ? "filter active" : "filter"}
-              onClick={() => setFilter(value)}
+              type="button"
+              onClick={() => setSearchTerm("")}
+              aria-label="Clear search"
             >
-              {value === "ALL"
-                ? "All items"
-                : value === "LOST"
-                  ? "🔴 Lost items"
-                  : "🟢 Found items"}
+              ✕
             </button>
-          ))}
+          )}
         </div>
 
-        {loading && <p className="message">Loading items...</p>}
-        {!loading && error && <p className="message error">{error}</p>}
+        {/* Category Filter */}
+        <div className="category-filter">
+          <label htmlFor="categoryFilter">
+            Category:
+          </label>
 
-        {!loading && !error && filteredItems.length === 0 && (
-          <div className="empty-state">
-            <span>🔍</span>
-            <h3>No items reported yet</h3>
-            <p>Reported items will appear here.</p>
-          </div>
+          <select
+            id="categoryFilter"
+            value={categoryFilter}
+            onChange={(e) =>
+              setCategoryFilter(e.target.value)
+            }
+          >
+            <option value="ALL">All Categories</option>
+            <option value="Electronics">Electronics</option>
+            <option value="Bags">Bags</option>
+            <option value="Documents">Documents</option>
+            <option value="Keys">Keys</option>
+            <option value="Clothing">Clothing</option>
+            <option value="Jewelry">Jewelry</option>
+            <option value="Pets">Pets</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        {/* Lost / Found Filter */}
+        <div className="filters">
+          {(["ALL", "LOST", "FOUND"] as const).map(
+            (value) => (
+              <button
+                key={value}
+                className={
+                  filter === value
+                    ? "filter active"
+                    : "filter"
+                }
+                onClick={() => setFilter(value)}
+              >
+                {value === "ALL"
+                  ? "All items"
+                  : value === "LOST"
+                    ? "🔴 Lost items"
+                    : "🟢 Found items"}
+              </button>
+            )
+          )}
+        </div>
+
+        {loading && (
+          <p className="message">Loading items...</p>
         )}
 
-        <div className="items-grid">
-          {filteredItems.map((item) => (
-            <article className="item-card" key={item._id}>
-              {item.image ? (
-                <img className="item-image" src={item.image} alt={item.title} />
-              ) : (
-                <div className="item-placeholder">📦</div>
-              )}
+        {!loading && error && (
+          <p className="message error">{error}</p>
+        )}
 
-              <div className="item-content">
-                <span className={item.itemType === "LOST" ? "badge lost" : "badge found"}>
-                  {item.itemType}
-                </span>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-                <div className="item-meta">
-                  <span>📍 {item.location}</span>
-                  <span>🏷️ {item.category}</span>
-                  <span>📅 {new Date(item.date).toLocaleDateString()}</span>
+        {!loading &&
+          !error &&
+          filteredItems.length === 0 && (
+            <div className="empty-state">
+              <span>🔍</span>
+              <h3>No items reported yet</h3>
+              <p>Reported items will appear here.</p>
+            </div>
+          )}
+
+        {/* Item Cards */}
+        <div className="items-grid">
+          {filteredItems.map((item) => {
+            const ownerId =
+              typeof item.userId === "string"
+                ? item.userId
+                : item.userId?._id;
+
+            const isOwner =
+              currentUser?.userId === ownerId;
+
+            return (
+              <article
+                className="item-card"
+                key={item._id}
+              >
+                {item.image ? (
+                  <img
+                    className="item-image"
+                    src={item.image}
+                    alt={item.title}
+                  />
+                ) : (
+                  <div className="item-placeholder">
+                    📦
+                  </div>
+                )}
+
+                <div className="item-content">
+                  <span
+                    className={
+                      item.itemType === "LOST"
+                        ? "badge lost"
+                        : "badge found"
+                    }
+                  >
+                    {item.itemType}
+                  </span>
+
+                  <h3>{item.title}</h3>
+
+                  <p>{item.description}</p>
+
+                  <div className="item-meta">
+                    <span>📍 {item.location}</span>
+                    <span>🏷️ {item.category}</span>
+                    <span>
+                      📅{" "}
+                      {new Date(
+                        item.date
+                      ).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <span className="status">
+                    {item.status}
+                  </span>
+
+                  {isOwner && (
+                    <div className="item-actions">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(item)}
+                      >
+                        ✏️ Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleDelete(item._id)
+                        }
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <span className="status">{item.status}</span>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </section>
 
+      {/* Footer */}
       <footer className="footer">
-        <p>FindIt — Helping lost belongings find their way home.</p>
+        <p>
+          FindIt — Helping lost belongings find their way home.
+        </p>
       </footer>
     </main>
   );
