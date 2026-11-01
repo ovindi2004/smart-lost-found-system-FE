@@ -21,6 +21,12 @@ interface Item {
       };
 }
 
+interface MatchResult {
+  item: Item;
+  matchScore: number;
+  matchedReasons: string[];
+}
+
 const emptyForm = {
   title: "",
   description: "",
@@ -34,6 +40,24 @@ const emptyForm = {
 
 function App() {
   const [items, setItems] = useState<Item[]>([]);
+  // DASHBOARD COUNTS
+const totalItems = items.length;
+
+const lostItems = items.filter(
+  (item) => item.itemType === "LOST"
+).length;
+
+const foundItems = items.filter(
+  (item) => item.itemType === "FOUND"
+).length;
+
+const matchedItems = items.filter(
+  (item) => item.status === "MATCHED"
+).length;
+
+const returnedItems = items.filter(
+  (item) => item.status === "RETURNED"
+).length;
 
   const [authMode, setAuthMode] = useState<
     "login" | "register" | null
@@ -49,15 +73,16 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<{
-    userId: string;
-    name: string;
-    email: string;
-    token: string;
-  } | null>(null);
+  userId: string;
+  name: string;
+  email: string;
+  role: "USER" | "ADMIN";
+  token: string;
+} | null>(null);
 
-  const [filter, setFilter] = useState<
-    "ALL" | "LOST" | "FOUND"
-  >("ALL");
+ const [filter, setFilter] = useState<
+  "ALL" | "LOST" | "FOUND" | "MY"
+>("ALL");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
@@ -70,6 +95,12 @@ function App() {
 
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Smart Matching states
+  const [matches, setMatches] = useState<MatchResult[]>([]);
+  const [matchingItem, setMatchingItem] = useState<Item | null>(null);
+  const [matchingLoading, setMatchingLoading] = useState(false);
+  const [matchingError, setMatchingError] = useState("");
 
   // Load all items
   const loadItems = async () => {
@@ -98,6 +129,43 @@ function App() {
   useEffect(() => {
     void loadItems();
   }, []);
+
+  // FIND SMART MATCHES
+ const handleFindMatches = async (item: Item) => {
+  console.log("MATCH BUTTON CLICKED:", item._id);
+
+  setMatchingItem(item);
+    setMatches([]);
+    setMatchingError("");
+    setMatchingLoading(true);
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/items/${item._id}/matches`
+      );
+
+      const result = await response.json();
+
+console.log("MATCH API RESPONSE:", result);
+
+if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to find matches."
+        );
+      }
+
+      setMatches(result.data);
+      console.log("MATCHES SET:", result.data);
+    } catch (err) {
+      setMatchingError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong."
+      );
+    } finally {
+      setMatchingLoading(false);
+    }
+  };
 
   // Edit item
   const handleEdit = (item: Item) => {
@@ -152,6 +220,43 @@ function App() {
       );
     }
   };
+  // UPDATE ITEM STATUS
+const handleStatusChange = async (
+  item: Item,
+  newStatus: string
+) => {
+  try {
+    const response = await fetch(
+      `http://localhost:5000/api/items/${item._id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.message || "Failed to update status."
+      );
+    }
+
+    setNotice("Item status updated successfully!");
+    await loadItems();
+  } catch (err) {
+    setNotice(
+      err instanceof Error
+        ? err.message
+        : "Something went wrong."
+    );
+  }
+};
 
   // Create or update item
   const handleSubmit = async (
@@ -219,29 +324,66 @@ function App() {
 
   // Search and filter
   const filteredItems = items.filter((item) => {
-    const matchesFilter =
-      filter === "ALL" || item.itemType === filter;
+  const ownerId =
+    typeof item.userId === "string"
+      ? item.userId
+      : item.userId?._id;
 
-    const query = searchTerm.trim().toLowerCase();
+  const matchesFilter =
+    filter === "ALL" ||
+    item.itemType === filter ||
+    (filter === "MY" && currentUser?.userId === ownerId);
 
-    const matchesSearch =
-      item.title.toLowerCase().includes(query) ||
-      item.location.toLowerCase().includes(query) ||
-      item.category.toLowerCase().includes(query);
+  const query = searchTerm.trim().toLowerCase();
 
-    const matchesCategory =
-      categoryFilter === "ALL" ||
-      item.category === categoryFilter;
+  const matchesSearch =
+    item.title.toLowerCase().includes(query) ||
+    item.location.toLowerCase().includes(query) ||
+    item.category.toLowerCase().includes(query);
 
-    return (
-      matchesFilter &&
-      matchesSearch &&
-      matchesCategory
-    );
-  });
+  const matchesCategory =
+    categoryFilter === "ALL" ||
+    item.category === categoryFilter;
 
-  return (
-    <main className="app">
+  return matchesFilter && matchesSearch && matchesCategory;
+});
+
+return (
+  <main className="app">
+
+    {/* USER DASHBOARD */}
+    <section className="dashboard">
+      <h2>📊 User Dashboard</h2>
+
+      <div className="dashboard-cards">
+        <div className="dashboard-card">
+          <h3>Total Items</h3>
+          <p>{totalItems}</p>
+        </div>
+
+        <div className="dashboard-card">
+          <h3>Lost Items</h3>
+          <p>{lostItems}</p>
+        </div>
+
+        <div className="dashboard-card">
+          <h3>Found Items</h3>
+          <p>{foundItems}</p>
+        </div>
+
+        <div className="dashboard-card">
+          <h3>Matched Items</h3>
+          <p>{matchedItems}</p>
+        </div>
+
+        <div className="dashboard-card">
+          <h3>Returned Items</h3>
+          <p>{returnedItems}</p>
+        </div>
+      </div>
+    </section>
+
+  
 
       {/* Navigation */}
       <header className="navbar">
@@ -418,8 +560,7 @@ function App() {
 
                   if (!loginResponse.ok) {
                     throw new Error(
-                      loginResult.message ||
-                      "Please login."
+                      loginResult.message || "Please login."
                     );
                   }
 
@@ -430,6 +571,7 @@ function App() {
                   userId: data.userId,
                   name: data.name,
                   email: data.email,
+                  role: data.role,
                   token: data.token,
                 });
 
@@ -558,9 +700,7 @@ function App() {
               </span>
 
               <h2>
-                {editingId
-                  ? "Edit Item"
-                  : "Report an Item"}
+                {editingId ? "Edit Item" : "Report an Item"}
               </h2>
             </div>
 
@@ -590,9 +730,7 @@ function App() {
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    itemType: e.target.value as
-                      | "LOST"
-                      | "FOUND",
+                    itemType: e.target.value as "LOST" | "FOUND",
                   })
                 }
               >
@@ -848,14 +986,20 @@ function App() {
 
         {/* Lost / Found Filter */}
         <div className="filters">
+          <button
+  className={
+    filter === "MY" ? "filter active" : "filter"
+  }
+  onClick={() => setFilter("MY")}
+>
+  👤 My Items
+</button>
           {(["ALL", "LOST", "FOUND"] as const).map(
             (value) => (
               <button
                 key={value}
                 className={
-                  filter === value
-                    ? "filter active"
-                    : "filter"
+                  filter === value ? "filter active" : "filter"
                 }
                 onClick={() => setFilter(value)}
               >
@@ -877,15 +1021,13 @@ function App() {
           <p className="message error">{error}</p>
         )}
 
-        {!loading &&
-          !error &&
-          filteredItems.length === 0 && (
-            <div className="empty-state">
-              <span>🔍</span>
-              <h3>No items reported yet</h3>
-              <p>Reported items will appear here.</p>
-            </div>
-          )}
+        {!loading && !error && filteredItems.length === 0 && (
+          <div className="empty-state">
+            <span>🔍</span>
+            <h3>No items reported yet</h3>
+            <p>Reported items will appear here.</p>
+          </div>
+        )}
 
         {/* Item Cards */}
         <div className="items-grid">
@@ -899,10 +1041,7 @@ function App() {
               currentUser?.userId === ownerId;
 
             return (
-              <article
-                className="item-card"
-                key={item._id}
-              >
+              <article className="item-card" key={item._id}>
                 {item.image ? (
                   <img
                     className="item-image"
@@ -927,24 +1066,45 @@ function App() {
                   </span>
 
                   <h3>{item.title}</h3>
-
                   <p>{item.description}</p>
 
                   <div className="item-meta">
                     <span>📍 {item.location}</span>
                     <span>🏷️ {item.category}</span>
                     <span>
-                      📅{" "}
-                      {new Date(
-                        item.date
-                      ).toLocaleDateString()}
+                      📅 {new Date(item.date).toLocaleDateString()}
                     </span>
                   </div>
 
-                  <span className="status">
-                    {item.status}
-                  </span>
+                  <div className="status-control">
+  <label htmlFor={`status-${item._id}`}>
+    Item Status:
+  </label>
 
+  <select
+    id={`status-${item._id}`}
+    value={item.status}
+    disabled={!isOwner}
+    onChange={(e) =>
+      handleStatusChange(item, e.target.value)
+    }
+  >
+    <option value="OPEN">OPEN</option>
+    <option value="MATCHED">MATCHED</option>
+    <option value="RETURNED">RETURNED</option>
+  </select>
+</div>
+
+                  {/* Find Matches - visible for all items */}
+                  <button
+                    type="button"
+                    className="match-button"
+                    onClick={() => handleFindMatches(item)}
+                  >
+                    🤖 Find Matches
+                  </button>
+
+                  {/* Edit and Delete - owner only */}
                   {isOwner && (
                     <div className="item-actions">
                       <button
@@ -956,9 +1116,7 @@ function App() {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          handleDelete(item._id)
-                        }
+                        onClick={() => handleDelete(item._id)}
                       >
                         🗑️ Delete
                       </button>
@@ -970,6 +1128,125 @@ function App() {
           })}
         </div>
       </section>
+
+      {/* SMART MATCHING RESULTS */}
+      {matchingItem && (
+        <section className="items-section" id="matches">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">
+                SMART MATCHING RESULTS
+              </span>
+
+              <h2>Matches for {matchingItem.title}</h2>
+            </div>
+
+            <button
+              type="button"
+              className="cancel-button"
+              onClick={() => {
+                setMatchingItem(null);
+                setMatches([]);
+                setMatchingError("");
+              }}
+            >
+              ✖ Close
+            </button>
+          </div>
+
+          {matchingLoading && (
+            <p className="message">
+              Finding matching items...
+            </p>
+          )}
+
+          {matchingError && (
+            <p className="message error">
+              {matchingError}
+            </p>
+          )}
+
+          {!matchingLoading &&
+            !matchingError &&
+            matches.length === 0 && (
+              <div className="empty-state">
+                <h3>No matching items found</h3>
+                <p>There are no similar reports yet.</p>
+              </div>
+            )}
+
+    
+
+          {!matchingLoading && matches.length > 0 && (
+            <div className="items-grid">
+              {matches.map((match) => (
+                <article
+                  className="item-card"
+                  key={match.item._id}
+                >
+                  {match.item.image ? (
+                    <img
+                      className="item-image"
+                      src={match.item.image}
+                      alt={match.item.title}
+                    />
+                  ) : (
+                    <div className="item-placeholder">
+                      📦
+                    </div>
+                  )}
+
+                  <div className="item-content">
+                    <span
+                      className={
+                        match.item.itemType === "LOST"
+                          ? "badge lost"
+                          : "badge found"
+                      }
+                    >
+                      {match.item.itemType}
+                    </span>
+
+                    <h3>{match.item.title}</h3>
+                    <p>{match.item.description}</p>
+
+                    <div className="item-meta">
+                      <span>📍 {match.item.location}</span>
+                      <span>🏷️ {match.item.category}</span>
+                      <span>
+                        📅{" "}
+                        {new Date(
+                          match.item.date
+                        ).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <div className="match-score">
+                      {match.matchScore}% Match
+                    </div>
+
+                    <div className="match-reasons">
+                      <strong>Why it matches:</strong>
+
+                      {match.matchedReasons.length > 0 ? (
+                        <ul>
+                          {match.matchedReasons.map(
+                            (reason, index) => (
+                              <li key={index}>{reason}</li>
+                            )
+                          )}
+                        </ul>
+                      ) : (
+                        <p>Some item details are similar.</p>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="footer">

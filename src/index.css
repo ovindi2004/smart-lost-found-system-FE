@@ -267,3 +267,65 @@ code {
     margin: 18px 15px 0;
   }
 }
+.match-score {
+  margin-top: 14px;
+  padding: 12px;
+  background: #e8f8ef;
+  color: #218653;
+  border-radius: 9px;
+  font-weight: 800;
+}
+
+.match-reasons {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #626981;
+}
+
+.match-reasons ul {
+  margin: 8px 0 0 18px;
+  line-height: 1.8;
+}
+
+/* USER DASHBOARD */
+.dashboard {
+  margin: 40px auto;
+  padding: 30px;
+  max-width: 1200px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.dashboard h2 {
+  font-size: 26px;
+  margin-bottom: 25px;
+  color: #222;
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+}
+
+.dashboard-card {
+  padding: 25px 20px;
+  background: #f5f3ff;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid #e8e3ff;
+}
+
+.dashboard-card h3 {
+  font-size: 15px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.dashboard-card p {
+  font-size: 32px;
+  font-weight: 700;
+  color: #7654c8;
+  margin: 0;
+}
