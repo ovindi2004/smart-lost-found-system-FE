@@ -383,6 +383,40 @@ return (
       </div>
     </section>
 
+    {/* ADMIN DASHBOARD */}
+{currentUser?.role === "ADMIN" && (
+  <section className="dashboard">
+    <h2>🛡️ Admin Dashboard</h2>
+
+    <div className="dashboard-cards">
+      <div className="dashboard-card">
+        <h3>Total Items</h3>
+        <p>{items.length}</p>
+      </div>
+
+      <div className="dashboard-card">
+        <h3>Lost Items</h3>
+        <p>{items.filter((item) => item.itemType === "LOST").length}</p>
+      </div>
+
+      <div className="dashboard-card">
+        <h3>Found Items</h3>
+        <p>{items.filter((item) => item.itemType === "FOUND").length}</p>
+      </div>
+
+      <div className="dashboard-card">
+        <h3>Matched Items</h3>
+        <p>{items.filter((item) => item.status === "MATCHED").length}</p>
+      </div>
+
+      <div className="dashboard-card">
+        <h3>Returned Items</h3>
+        <p>{items.filter((item) => item.status === "RETURNED").length}</p>
+      </div>
+    </div>
+  </section>
+)}
+
   
 
       {/* Navigation */}
