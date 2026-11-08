@@ -34,6 +34,24 @@ interface MatchResult {
   matchedReasons: string[];
 }
 
+interface Claim {
+  _id: string;
+  itemId: Item | string;
+  claimantId: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  ownerId: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  proofDescription: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt?: string;
+}
+
 const emptyForm = {
   title: "",
   description: "",
@@ -103,6 +121,13 @@ function App() {
   const [matchingLoading, setMatchingLoading] = useState(false);
   const [matchingError, setMatchingError] = useState("");
 
+  // Claim System states
+const [claims, setClaims] = useState<Claim[]>([]);
+const [claimItem, setClaimItem] = useState<Item | null>(null);
+const [proofDescription, setProofDescription] = useState("");
+const [claimLoading, setClaimLoading] = useState(false);
+const [claimMessage, setClaimMessage] = useState("");
+
   // Load all items
   const loadItems = async () => {
     try {
@@ -150,6 +175,42 @@ function App() {
     fetchUsers();
   }, [currentUser]);
 
+
+  // LOAD CLAIMS
+useEffect(() => {
+  const fetchClaims = async () => {
+    if (!currentUser) {
+      setClaims([]);
+      return;
+    }
+
+    try {
+      const endpoint =
+        currentUser.role === "ADMIN"
+          ? "http://localhost:5000/api/claims"
+          : "http://localhost:5000/api/claims/my";
+
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${currentUser.token}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setClaims(result.data || []);
+      } else {
+        console.error("Failed to load claims:", result.message);
+      }
+    } catch (error) {
+      console.error("Error loading claims:", error);
+    }
+  };
+
+  void fetchClaims();
+}, [currentUser]);
+
   // FIND SMART MATCHES
   const handleFindMatches = async (item: Item) => {
     setMatchingItem(item);
@@ -177,7 +238,116 @@ function App() {
       setMatchingLoading(false);
     }
   };
+   
+// SUBMIT CLAIM REQUEST
+const handleSubmitClaim = async (event: FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
 
+  if (!currentUser) {
+    setClaimMessage("Please login before submitting a claim.");
+    return;
+  }
+
+  if (!claimItem || !proofDescription.trim()) {
+    setClaimMessage("Please provide ownership proof.");
+    return;
+  }
+
+  setClaimLoading(true);
+  setClaimMessage("");
+
+  try {
+    const response = await fetch("http://localhost:5000/api/claims", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${currentUser.token}`,
+      },
+      body: JSON.stringify({
+        itemId: claimItem._id,
+        proofDescription: proofDescription.trim(),
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to submit claim.");
+    }
+
+    setClaimMessage("Claim submitted successfully!");
+
+    setProofDescription("");
+    setClaimItem(null);
+
+    setNotice("Your claim request has been submitted!");
+  } catch (err) {
+    setClaimMessage(
+      err instanceof Error ? err.message : "Something went wrong."
+    );
+  } finally {
+    setClaimLoading(false);
+  }
+};
+// APPROVE OR REJECT CLAIM
+const handleUpdateClaim = async (
+  claimId: string,
+  status: "APPROVED" | "REJECTED"
+) => {
+  if (!currentUser) return;
+
+  const confirmed = window.confirm(
+    `Are you sure you want to ${status.toLowerCase()} this claim?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(
+      `http://localhost:5000/api/claims/${claimId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentUser.token}`,
+        },
+        body: JSON.stringify({ status }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to update claim.");
+    }
+
+    setNotice(result.message);
+
+    // Reload claims
+    const endpoint =
+      currentUser.role === "ADMIN"
+        ? "http://localhost:5000/api/claims"
+        : "http://localhost:5000/api/claims/my";
+
+    const claimsResponse = await fetch(endpoint, {
+      headers: {
+        Authorization: `Bearer ${currentUser.token}`,
+      },
+    });
+
+    const claimsResult = await claimsResponse.json();
+
+    if (claimsResponse.ok) {
+      setClaims(claimsResult.data || []);
+    }
+
+    await loadItems();
+  } catch (err) {
+    setNotice(
+      err instanceof Error ? err.message : "Something went wrong."
+    );
+  }
+};
   // Edit item
   const handleEdit = (item: Item) => {
     setForm({
@@ -480,6 +650,114 @@ function App() {
               <p>{returnedItems}</p>
             </div>
           </div>
+
+
+          {/* CLAIMS MANAGEMENT */}
+<div className="user-management">
+  <div className="um-header">
+    <div>
+      <span className="um-eyebrow">
+        📩 CLAIM MANAGEMENT
+      </span>
+      <h3>
+        {currentUser.role === "ADMIN"
+          ? "All Claim Requests"
+          : "Received Claim Requests"}
+      </h3>
+    </div>
+
+    <span className="badge-count">
+      Total Claims: {claims.length}
+    </span>
+  </div>
+
+  {claims.length === 0 ? (
+    <div className="empty-state">
+      <h3>No Claim Requests Yet</h3>
+      <p>Claim requests will appear here.</p>
+    </div>
+  ) : (
+    <div className="users-table-wrap">
+      <table className="users-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Claimant</th>
+            <th>Ownership Proof</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {claims.map((claim) => {
+            const item =
+              typeof claim.itemId === "string"
+                ? null
+                : claim.itemId;
+
+            return (
+              <tr key={claim._id}>
+                <td className="cell-name">
+                  {item?.title || "Item"}
+                </td>
+
+                <td>
+                  {claim.claimantId?.name || "Unknown"}
+                  <br />
+                  <small>
+                    {claim.claimantId?.email || ""}
+                  </small>
+                </td>
+
+                <td>{claim.proofDescription}</td>
+
+                <td>
+                  <span
+                    className={`role-badge ${claim.status.toLowerCase()}`}
+                  >
+                    {claim.status}
+                  </span>
+                </td>
+
+                <td>
+                  {currentUser.role === "USER" &&
+                    claim.status === "PENDING" && (
+                      <div className="item-actions">
+                        <button
+                          type="button"
+                          className="btn-edit"
+                          onClick={() =>
+                            handleUpdateClaim(claim._id, "APPROVED")
+                          }
+                        >
+                          Approve
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn-delete"
+                          onClick={() =>
+                            handleUpdateClaim(claim._id, "REJECTED")
+                          }
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+
+                  {currentUser.role === "ADMIN" && (
+                    <span>Monitor Only</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
 
           {/* ADMIN USER MANAGEMENT */}
           {currentUser.role === "ADMIN" && (
@@ -1041,6 +1319,23 @@ setCurrentUser(loggedInUser);
                   >
                     ⚡ Smart AI Match
                   </button>
+{/* CLAIM THIS ITEM BUTTON */}
+{currentUser?.role === "USER" &&
+  item.itemType === "FOUND" &&
+  item.status === "OPEN" &&
+  !isOwner && (
+    <button
+      type="button"
+      className="match-button"
+      onClick={() => {
+        setClaimItem(item);
+        setProofDescription("");
+        setClaimMessage("");
+      }}
+    >
+      📩 Claim This Item
+    </button>
+  )}
 
                   {(isOwner || currentUser?.role === "ADMIN") && (
                     <div className="item-actions">
@@ -1144,6 +1439,76 @@ setCurrentUser(loggedInUser);
           </section>
         </div>
       )}
+
+      {/* CLAIM REQUEST MODAL */}
+{claimItem && (
+  <div className="modal-overlay">
+    <section className="form-section modal-card">
+      <div className="form-heading">
+        <div>
+          <span className="eyebrow">ITEM OWNERSHIP VERIFICATION</span>
+          <h2>Submit Claim Request</h2>
+        </div>
+
+        <button
+          type="button"
+          className="close-button"
+          onClick={() => {
+            setClaimItem(null);
+            setProofDescription("");
+            setClaimMessage("");
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmitClaim} className="item-form">
+        <label>
+          Item Name
+          <input value={claimItem.title} readOnly />
+        </label>
+
+        <label>
+          Ownership Proof
+          <textarea
+            required
+            rows={4}
+            value={proofDescription}
+            onChange={(e) => setProofDescription(e.target.value)}
+            placeholder="Describe unique details to prove this item belongs to you..."
+          />
+        </label>
+
+        {claimMessage && (
+          <p className="message error">{claimMessage}</p>
+        )}
+
+        <div className="form-actions">
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={() => {
+              setClaimItem(null);
+              setProofDescription("");
+              setClaimMessage("");
+            }}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="submit"
+            className="submit-button"
+            disabled={claimLoading}
+          >
+            {claimLoading ? "Submitting..." : "Submit Claim"}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+)}
 
       {/* Footer */}
       <footer className="footer">
