@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
 
 interface Item {
@@ -11,7 +10,7 @@ interface Item {
   location: string;
   date: string;
   image?: string;
-  status: string;
+  status: "OPEN" | "MATCHED" | "RETURNED" | string;
   userId:
     | string
     | {
@@ -19,6 +18,14 @@ interface Item {
         name: string;
         email: string;
       };
+}
+
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: "USER" | "ADMIN";
+  createdAt?: string;
 }
 
 interface MatchResult {
@@ -40,29 +47,16 @@ const emptyForm = {
 
 function App() {
   const [items, setItems] = useState<Item[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+
   // DASHBOARD COUNTS
-const totalItems = items.length;
+  const totalItems = items.length;
+  const lostItems = items.filter((item) => item.itemType === "LOST").length;
+  const foundItems = items.filter((item) => item.itemType === "FOUND").length;
+  const matchedItems = items.filter((item) => item.status === "MATCHED").length;
+  const returnedItems = items.filter((item) => item.status === "RETURNED").length;
 
-const lostItems = items.filter(
-  (item) => item.itemType === "LOST"
-).length;
-
-const foundItems = items.filter(
-  (item) => item.itemType === "FOUND"
-).length;
-
-const matchedItems = items.filter(
-  (item) => item.status === "MATCHED"
-).length;
-
-const returnedItems = items.filter(
-  (item) => item.status === "RETURNED"
-).length;
-
-  const [authMode, setAuthMode] = useState<
-    "login" | "register" | null
-  >(null);
-
+  const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
   const [authForm, setAuthForm] = useState({
     name: "",
     email: "",
@@ -73,17 +67,14 @@ const returnedItems = items.filter(
   const [authLoading, setAuthLoading] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<{
-  userId: string;
-  name: string;
-  email: string;
-  role: "USER" | "ADMIN";
-  token: string;
-} | null>(null);
+    userId: string;
+    name: string;
+    email: string;
+    role: "USER" | "ADMIN";
+    token: string;
+  } | null>(null);
 
- const [filter, setFilter] = useState<
-  "ALL" | "LOST" | "FOUND" | "MY"
->("ALL");
-
+  const [filter, setFilter] = useState<"ALL" | "LOST" | "FOUND" | "MY">("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
 
@@ -105,22 +96,15 @@ const returnedItems = items.filter(
   // Load all items
   const loadItems = async () => {
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/items"
-      );
-
+      const response = await fetch("http://localhost:5000/api/items");
       if (!response.ok) {
         throw new Error("Could not load items");
       }
-
       const result = await response.json();
-
-      setItems(result.data);
+      setItems(result.data || []);
       setError("");
     } catch {
-      setError(
-        "Could not connect to the server. Please try again."
-      );
+      setError("Could not connect to the server. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -130,11 +114,35 @@ const returnedItems = items.filter(
     void loadItems();
   }, []);
 
-  // FIND SMART MATCHES
- const handleFindMatches = async (item: Item) => {
-  console.log("MATCH BUTTON CLICKED:", item._id);
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (currentUser?.role !== "ADMIN") return;
 
-  setMatchingItem(item);
+      try {
+        const response = await fetch("http://localhost:5000/api/users", {
+          headers: {
+            Authorization: `Bearer ${currentUser.token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setUsers(data.data || []);
+        } else {
+          console.error(data.message);
+        }
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    };
+
+    fetchUsers();
+  }, [currentUser]);
+
+  // FIND SMART MATCHES
+  const handleFindMatches = async (item: Item) => {
+    setMatchingItem(item);
     setMatches([]);
     setMatchingError("");
     setMatchingLoading(true);
@@ -146,21 +154,14 @@ const returnedItems = items.filter(
 
       const result = await response.json();
 
-console.log("MATCH API RESPONSE:", result);
-
-if (!response.ok) {
-        throw new Error(
-          result.message || "Failed to find matches."
-        );
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to find matches.");
       }
 
-      setMatches(result.data);
-      console.log("MATCHES SET:", result.data);
+      setMatches(result.data || []);
     } catch (err) {
       setMatchingError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
+        err instanceof Error ? err.message : "Something went wrong."
       );
     } finally {
       setMatchingLoading(false);
@@ -187,81 +188,56 @@ if (!response.ok) {
 
   // Delete item
   const handleDelete = async (id: string) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this item?"
-    );
-
+    const confirmed = window.confirm("Are you sure you want to delete this item?");
     if (!confirmed) return;
 
     try {
+      const response = await fetch(`http://localhost:5000/api/items/${id}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to delete item.");
+      }
+
+      setNotice("Item deleted successfully!");
+      await loadItems();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Something went wrong.");
+    }
+  };
+
+  // UPDATE ITEM STATUS
+  const handleStatusChange = async (item: Item, newStatus: string) => {
+    try {
       const response = await fetch(
-        `http://localhost:5000/api/items/${id}`,
+        `http://localhost:5000/api/items/${item._id}`,
         {
-          method: "DELETE",
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: newStatus }),
         }
       );
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          result.message || "Failed to delete item."
-        );
+        throw new Error(result.message || "Failed to update status.");
       }
 
-      setNotice("Item deleted successfully!");
-
+      setNotice("Item status updated successfully!");
       await loadItems();
     } catch (err) {
-      setNotice(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
-      );
+      setNotice(err instanceof Error ? err.message : "Something went wrong.");
     }
   };
-  // UPDATE ITEM STATUS
-const handleStatusChange = async (
-  item: Item,
-  newStatus: string
-) => {
-  try {
-    const response = await fetch(
-      `http://localhost:5000/api/items/${item._id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: newStatus,
-        }),
-      }
-    );
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        result.message || "Failed to update status."
-      );
-    }
-
-    setNotice("Item status updated successfully!");
-    await loadItems();
-  } catch (err) {
-    setNotice(
-      err instanceof Error
-        ? err.message
-        : "Something went wrong."
-    );
-  }
-};
 
   // Create or update item
-  const handleSubmit = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setNotice("");
 
@@ -295,9 +271,7 @@ const handleStatusChange = async (
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          result.message || "Failed to save item."
-        );
+        throw new Error(result.message || "Failed to save item.");
       }
 
       setNotice(
@@ -312,11 +286,7 @@ const handleStatusChange = async (
 
       await loadItems();
     } catch (err) {
-      setNotice(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong."
-      );
+      setNotice(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setSaving(false);
     }
@@ -324,119 +294,78 @@ const handleStatusChange = async (
 
   // Search and filter
   const filteredItems = items.filter((item) => {
-  const ownerId =
-    typeof item.userId === "string"
-      ? item.userId
-      : item.userId?._id;
+    const ownerId =
+      typeof item.userId === "string" ? item.userId : item.userId?._id;
 
-  const matchesFilter =
-    filter === "ALL" ||
-    item.itemType === filter ||
-    (filter === "MY" && currentUser?.userId === ownerId);
+    const matchesFilter =
+      filter === "ALL" ||
+      item.itemType === filter ||
+      (filter === "MY" && currentUser?.userId === ownerId);
 
-  const query = searchTerm.trim().toLowerCase();
+    const query = searchTerm.trim().toLowerCase();
 
-  const matchesSearch =
-    item.title.toLowerCase().includes(query) ||
-    item.location.toLowerCase().includes(query) ||
-    item.category.toLowerCase().includes(query);
+    const matchesSearch =
+      item.title.toLowerCase().includes(query) ||
+      item.location.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query);
 
-  const matchesCategory =
-    categoryFilter === "ALL" ||
-    item.category === categoryFilter;
+    const matchesCategory =
+      categoryFilter === "ALL" || item.category === categoryFilter;
 
-  return matchesFilter && matchesSearch && matchesCategory;
-});
+    return matchesFilter && matchesSearch && matchesCategory;
+  });
 
-return (
-  <main className="app">
+  const handleDeleteUser = async (userId: string) => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this user?"
+    );
+    if (!confirmDelete) return;
 
-    {/* USER DASHBOARD */}
-    <section className="dashboard">
-      <h2>📊 User Dashboard</h2>
+    try {
+      const response = await fetch(
+        `http://localhost:5000/api/users/${userId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${currentUser?.token}`,
+          },
+        }
+      );
 
-      <div className="dashboard-cards">
-        <div className="dashboard-card">
-          <h3>Total Items</h3>
-          <p>{totalItems}</p>
-        </div>
+      const data = await response.json();
 
-        <div className="dashboard-card">
-          <h3>Lost Items</h3>
-          <p>{lostItems}</p>
-        </div>
+      if (response.ok) {
+        setUsers((prevUsers) =>
+          prevUsers.filter((user) => user._id !== userId)
+        );
+        alert("User deleted successfully!");
+      } else {
+        alert(data.message || "Failed to delete user");
+      }
+    } catch (error) {
+      console.error("Delete user error:", error);
+    }
+  };
 
-        <div className="dashboard-card">
-          <h3>Found Items</h3>
-          <p>{foundItems}</p>
-        </div>
-
-        <div className="dashboard-card">
-          <h3>Matched Items</h3>
-          <p>{matchedItems}</p>
-        </div>
-
-        <div className="dashboard-card">
-          <h3>Returned Items</h3>
-          <p>{returnedItems}</p>
-        </div>
-      </div>
-    </section>
-
-    {/* ADMIN DASHBOARD */}
-{currentUser?.role === "ADMIN" && (
-  <section className="dashboard">
-    <h2>🛡️ Admin Dashboard</h2>
-
-    <div className="dashboard-cards">
-      <div className="dashboard-card">
-        <h3>Total Items</h3>
-        <p>{items.length}</p>
-      </div>
-
-      <div className="dashboard-card">
-        <h3>Lost Items</h3>
-        <p>{items.filter((item) => item.itemType === "LOST").length}</p>
-      </div>
-
-      <div className="dashboard-card">
-        <h3>Found Items</h3>
-        <p>{items.filter((item) => item.itemType === "FOUND").length}</p>
-      </div>
-
-      <div className="dashboard-card">
-        <h3>Matched Items</h3>
-        <p>{items.filter((item) => item.status === "MATCHED").length}</p>
-      </div>
-
-      <div className="dashboard-card">
-        <h3>Returned Items</h3>
-        <p>{items.filter((item) => item.status === "RETURNED").length}</p>
-      </div>
-    </div>
-  </section>
-)}
-
-  
-
+  return (
+    <main className="app">
       {/* Navigation */}
       <header className="navbar">
         <a className="brand" href="/">
-          <span className="brand-icon">🔎</span>
-          FindIt
+          <span className="brand-icon">🎓</span>
+          <span className="brand-title">UniFind</span>
         </a>
 
-        <div className="nav-label">
-          Smart Lost & Found
-        </div>
+        <div className="nav-label">Smart Lost & Found Portal</div>
 
         <div className="auth-buttons">
           {currentUser ? (
-            <>
-              <span>Hi, {currentUser.name}</span>
-
+            <div className="user-profile-badge">
+              <span className="user-name">Hi, {currentUser.name}</span>
+              <span className="role-tag">{currentUser.role}</span>
               <button
                 type="button"
+                className="btn-logout"
                 onClick={() => {
                   setCurrentUser(null);
                   setNotice("Logged out successfully!");
@@ -444,11 +373,12 @@ return (
               >
                 Logout
               </button>
-            </>
+            </div>
           ) : (
-            <>
+            <div className="auth-action-btns">
               <button
                 type="button"
+                className="btn-login"
                 onClick={() => {
                   setAuthMode("login");
                   setAuthMessage("");
@@ -456,9 +386,9 @@ return (
               >
                 Login
               </button>
-
               <button
                 type="button"
+                className="btn-register"
                 onClick={() => {
                   setAuthMode("register");
                   setAuthMessage("");
@@ -466,35 +396,27 @@ return (
               >
                 Register
               </button>
-            </>
+            </div>
           )}
         </div>
       </header>
 
       {/* Hero Section */}
       <section className="hero">
-        <span className="eyebrow">
-          LOST SOMETHING? FOUND SOMETHING?
-        </span>
-
+        <span className="eyebrow">UNIVERSITY CAMPUS RECOVERY NETWORK</span>
         <h1>
-          Lost it? <span>Let's find it.</span>
+          Lost it on Campus? <span>Let's find it fast.</span>
         </h1>
-
         <p>
-          Help bring someone's precious belongings back home.
-          Report lost or found items and explore community reports.
+          Connect with students and staff to return lost items quickly using smart matching filters.
         </p>
 
         <div className="hero-actions">
           <button
-            className="hero-button"
+            className="hero-button primary"
             onClick={() => {
               setEditingId(null);
-              setForm({
-                ...emptyForm,
-                itemType: "LOST",
-              });
+              setForm({ ...emptyForm, itemType: "LOST" });
               setShowForm(true);
               setNotice("");
             }}
@@ -506,10 +428,7 @@ return (
             className="hero-button secondary"
             onClick={() => {
               setEditingId(null);
-              setForm({
-                ...emptyForm,
-                itemType: "FOUND",
-              });
+              setForm({ ...emptyForm, itemType: "FOUND" });
               setShowForm(true);
               setNotice("");
             }}
@@ -519,551 +438,519 @@ return (
         </div>
       </section>
 
-      {/* Login / Register */}
-      {authMode && (
-        <section className="form-section">
-          <div className="form-heading">
-            <div>
-              <span className="eyebrow">
-                WELCOME TO FINDIT
-              </span>
+      {/* USER & ADMIN DASHBOARDS */}
+      {currentUser && (
+        <section className="dashboard">
+          <h2>
+            {currentUser.role === "ADMIN"
+              ? "🛡️ Admin Operations Center"
+              : "📊 Campus Dashboard"}
+          </h2>
 
-              <h2>
-                {authMode === "register"
-                  ? "Create Account"
-                  : "Login"}
-              </h2>
+          <div className="dashboard-cards">
+            <div className="dashboard-card">
+              <h3>Total Reports</h3>
+              <p>{totalItems}</p>
             </div>
-
-            <button
-              type="button"
-              className="close-button"
-              onClick={() => setAuthMode(null)}
-            >
-              ✕
-            </button>
+            <div className="dashboard-card lost">
+              <h3>Lost Items</h3>
+              <p>{lostItems}</p>
+            </div>
+            <div className="dashboard-card found">
+              <h3>Found Items</h3>
+              <p>{foundItems}</p>
+            </div>
+            <div className="dashboard-card matched">
+              <h3>Matched Items</h3>
+              <p>{matchedItems}</p>
+            </div>
+            <div className="dashboard-card returned">
+              <h3>Returned Items</h3>
+              <p>{returnedItems}</p>
+            </div>
           </div>
 
-          <form
-            className="item-form"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              setAuthLoading(true);
-              setAuthMessage("");
+          {/* ADMIN USER MANAGEMENT */}
+          {currentUser.role === "ADMIN" && (
+            <div className="user-management">
+              <div className="um-header">
+                <div>
+                  <span className="um-eyebrow">
+                    <svg
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                      />
+                    </svg>
+                    Administrative Management Center
+                  </span>
+                  <h3>Campus Registered Users</h3>
+                </div>
+                <span className="badge-count">
+                  Total Registered Accounts: {users.length}
+                </span>
+              </div>
 
-              try {
-                const response = await fetch(
-                  `http://localhost:5000/api/auth/${authMode}`,
-                  {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify(authForm),
-                  }
-                );
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                  throw new Error(
-                    result.message ||
-                    "Authentication failed."
-                  );
-                }
-
-                let data = result.data;
-
-                if (authMode === "register") {
-                  const loginResponse = await fetch(
-                    "http://localhost:5000/api/auth/login",
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        email: authForm.email,
-                        password: authForm.password,
-                      }),
-                    }
-                  );
-
-                  const loginResult =
-                    await loginResponse.json();
-
-                  if (!loginResponse.ok) {
-                    throw new Error(
-                      loginResult.message || "Please login."
-                    );
-                  }
-
-                  data = loginResult.data;
-                }
-
-                setCurrentUser({
-                  userId: data.userId,
-                  name: data.name,
-                  email: data.email,
-                  role: data.role,
-                  token: data.token,
-                });
-
-                setForm((previous) => ({
-                  ...previous,
-                  userId: data.userId,
-                }));
-
-                setAuthMode(null);
-                setAuthForm({
-                  name: "",
-                  email: "",
-                  password: "",
-                });
-
-                setNotice(`Welcome, ${data.name}!`);
-              } catch (err) {
-                setAuthMessage(
-                  err instanceof Error
-                    ? err.message
-                    : "Something went wrong."
-                );
-              } finally {
-                setAuthLoading(false);
-              }
-            }}
-          >
-            {authMode === "register" && (
-              <label>
-                Full Name
-
-                <input
-                  required
-                  value={authForm.name}
-                  onChange={(e) =>
-                    setAuthForm({
-                      ...authForm,
-                      name: e.target.value,
-                    })
-                  }
-                  placeholder="Enter your name"
-                />
-              </label>
-            )}
-
-            <label>
-              Email
-
-              <input
-                required
-                type="email"
-                value={authForm.email}
-                onChange={(e) =>
-                  setAuthForm({
-                    ...authForm,
-                    email: e.target.value,
-                  })
-                }
-                placeholder="Enter your email"
-              />
-            </label>
-
-            <label>
-              Password
-
-              <input
-                required
-                type="password"
-                minLength={6}
-                value={authForm.password}
-                onChange={(e) =>
-                  setAuthForm({
-                    ...authForm,
-                    password: e.target.value,
-                  })
-                }
-                placeholder="At least 6 characters"
-              />
-            </label>
-
-            {authMessage && (
-              <p className="message error">
-                {authMessage}
-              </p>
-            )}
-
-            <div className="form-actions">
-              <button
-                type="button"
-                className="cancel-button"
-                onClick={() => setAuthMode(null)}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="submit-button"
-                disabled={authLoading}
-              >
-                {authLoading
-                  ? "Please wait..."
-                  : authMode === "register"
-                    ? "Create Account"
-                    : "Login"}
-              </button>
+              <div className="users-table-wrap">
+                <table className="users-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Joined Date</th>
+                      <th className="th-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u._id}>
+                        <td className="cell-name">{u.name}</td>
+                        <td className="cell-email">{u.email}</td>
+                        <td>
+                          <span className={`role-badge ${u.role.toLowerCase()}`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="cell-email">
+                          {u.createdAt ? u.createdAt.slice(0, 10) : "—"}
+                        </td>
+                        <td className="th-right">
+                          {u.role === "USER" && (
+                            <button
+                              type="button"
+                              className="delete-user-button"
+                              onClick={() => handleDeleteUser(u._id)}
+                            >
+                              Revoke User
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </form>
+          )}
         </section>
       )}
 
-      {/* Notice */}
-      {notice && (
-        <div className="notice" role="status">
-          {notice}
+      {/* Auth Modal */}
+      {authMode && (
+        <div className="modal-overlay">
+          <section className="form-section modal-card">
+            <div className="form-heading">
+              <div>
+                <span className="eyebrow">UNIFIND ACCESS</span>
+                <h2>{authMode === "register" ? "Create Account" : "User Login"}</h2>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setAuthMode(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              className="item-form"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setAuthLoading(true);
+                setAuthMessage("");
+
+                try {
+                  const response = await fetch(
+                    `http://localhost:5000/api/auth/${authMode}`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(authForm),
+                    }
+                  );
+
+                  const result = await response.json();
+                  if (!response.ok) {
+                    throw new Error(result.message || "Authentication failed.");
+                  }
+
+                  let data = result.data;
+
+                  if (authMode === "register") {
+                    const loginResponse = await fetch(
+                      "http://localhost:5000/api/auth/login",
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          email: authForm.email,
+                          password: authForm.password,
+                        }),
+                      }
+                    );
+                    const loginResult = await loginResponse.json();
+                    if (!loginResponse.ok) throw new Error(loginResult.message);
+                    data = loginResult.data;
+                  }
+
+                  setCurrentUser({
+                    userId: data.userId,
+                    name: data.name,
+                    email: data.email,
+                    role: data.role,
+                    token: data.token,
+                  });
+
+                  setAuthMode(null);
+                  setAuthForm({ name: "", email: "", password: "" });
+                  setNotice(`Welcome back, ${data.name}!`);
+                } catch (err) {
+                  setAuthMessage(
+                    err instanceof Error ? err.message : "Something went wrong."
+                  );
+                } finally {
+                  setAuthLoading(false);
+                }
+              }}
+            >
+              {authMode === "register" && (
+                <label>
+                  Full Name
+                  <input
+                    required
+                    value={authForm.name}
+                    onChange={(e) =>
+                      setAuthForm({ ...authForm, name: e.target.value })
+                    }
+                    placeholder="e.g. Ovindi Jayawardena"
+                  />
+                </label>
+              )}
+
+              <label>
+                Email Address
+                <input
+                  required
+                  type="email"
+                  value={authForm.email}
+                  onChange={(e) =>
+                    setAuthForm({ ...authForm, email: e.target.value })
+                  }
+                  placeholder="student@university.ac.lk"
+                />
+              </label>
+
+              <label>
+                Password
+                <input
+                  required
+                  type="password"
+                  minLength={6}
+                  value={authForm.password}
+                  onChange={(e) =>
+                    setAuthForm({ ...authForm, password: e.target.value })
+                  }
+                  placeholder="••••••••"
+                />
+              </label>
+
+              {authMessage && <p className="message error">{authMessage}</p>}
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="cancel-button"
+                  onClick={() => setAuthMode(null)}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="submit-button"
+                  disabled={authLoading}
+                >
+                  {authLoading
+                    ? "Processing..."
+                    : authMode === "register"
+                    ? "Create Account"
+                    : "Login"}
+                </button>
+              </div>
+            </form>
+          </section>
         </div>
       )}
 
-      {/* Report / Edit Form */}
+      {/* Notice Banner */}
+      {notice && (
+        <div className="notice" role="status">
+          <span>🔔</span> {notice}
+        </div>
+      )}
+
+      {/* Report / Edit Form Modal */}
       {showForm && (
-        <section className="form-section">
-          <div className="form-heading">
-            <div>
-              <span className="eyebrow">
-                COMMUNITY REPORT
-              </span>
-
-              <h2>
-                {editingId ? "Edit Item" : "Report an Item"}
-              </h2>
-            </div>
-
-            <button
-              type="button"
-              className="close-button"
-              onClick={() => {
-                setShowForm(false);
-                setEditingId(null);
-                setForm(emptyForm);
-              }}
-              aria-label="Close form"
-            >
-              ✕
-            </button>
-          </div>
-
-          <form
-            onSubmit={handleSubmit}
-            className="item-form"
-          >
-            <label>
-              Report type
-
-              <select
-                value={form.itemType}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    itemType: e.target.value as "LOST" | "FOUND",
-                  })
-                }
-              >
-                <option value="LOST">Lost item</option>
-                <option value="FOUND">Found item</option>
-              </select>
-            </label>
-
-            <label>
-              Item name
-
-              <input
-                required
-                value={form.title}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    title: e.target.value,
-                  })
-                }
-                placeholder="e.g. Black wallet"
-              />
-            </label>
-
-            <label>
-              Category
-
-              <select
-                required
-                value={form.category}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    category: e.target.value,
-                  })
-                }
-              >
-                <option value="">Choose category</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Bags">Bags</option>
-                <option value="Documents">Documents</option>
-                <option value="Keys">Keys</option>
-                <option value="Clothing">Clothing</option>
-                <option value="Jewelry">Jewelry</option>
-                <option value="Pets">Pets</option>
-                <option value="Other">Other</option>
-              </select>
-            </label>
-
-            <label>
-              Description
-
-              <textarea
-                required
-                rows={3}
-                value={form.description}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    description: e.target.value,
-                  })
-                }
-                placeholder="Describe the item..."
-              />
-            </label>
-
-            <label>
-              Item Photo
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-
-                  if (file) {
-                    const reader = new FileReader();
-
-                    reader.onloadend = () => {
-                      setForm((previous) => ({
-                        ...previous,
-                        image: reader.result as string,
-                      }));
-                    };
-
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-
-              {form.image && (
-                <div className="photo-preview">
-                  <img
-                    src={form.image}
-                    alt="Selected item preview"
-                    style={{
-                      width: "180px",
-                      height: "150px",
-                      objectFit: "cover",
-                      borderRadius: "10px",
-                      marginTop: "10px",
-                    }}
-                  />
-                </div>
-              )}
-
-              <small>
-                Upload a photo of the lost or found item.
-              </small>
-            </label>
-
-            <label>
-              Location
-
-              <input
-                required
-                value={form.location}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    location: e.target.value,
-                  })
-                }
-                placeholder="Where was it lost or found?"
-              />
-            </label>
-
-            <label>
-              Date
-
-              <input
-                required
-                type="date"
-                value={form.date}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    date: e.target.value,
-                  })
-                }
-              />
-            </label>
-
-            {!currentUser && (
-              <p className="message">
-                Please register or login before reporting an item.
-              </p>
-            )}
-
-            {currentUser && (
-              <p className="message">
-                Reporting as: {currentUser.name}
-              </p>
-            )}
-
-            <div className="form-actions">
+        <div className="modal-overlay">
+          <section className="form-section modal-card">
+            <div className="form-heading">
+              <div>
+                <span className="eyebrow">CAMPUS DIRECTORY REPORT</span>
+                <h2>{editingId ? "Edit Report Details" : "New Item Report"}</h2>
+              </div>
               <button
                 type="button"
-                className="cancel-button"
+                className="close-button"
                 onClick={() => {
                   setShowForm(false);
                   setEditingId(null);
                   setForm(emptyForm);
                 }}
               >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="submit-button"
-                disabled={saving}
-              >
-                {saving
-                  ? "Please wait..."
-                  : editingId
-                    ? "Update Item"
-                    : "Submit Report"}
+                ✕
               </button>
             </div>
-          </form>
-        </section>
+
+            <form onSubmit={handleSubmit} className="item-form">
+              <div className="form-grid">
+                <label>
+                  Report Type
+                  <select
+                    value={form.itemType}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        itemType: e.target.value as "LOST" | "FOUND",
+                      })
+                    }
+                  >
+                    <option value="LOST">🔴 Lost Item</option>
+                    <option value="FOUND">🟢 Found Item</option>
+                  </select>
+                </label>
+
+                <label>
+                  Item Title
+                  <input
+                    required
+                    value={form.title}
+                    onChange={(e) =>
+                      setForm({ ...form, title: e.target.value })
+                    }
+                    placeholder="e.g. Silver Dell Laptop"
+                  />
+                </label>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Category
+                  <select
+                    required
+                    value={form.category}
+                    onChange={(e) =>
+                      setForm({ ...form, category: e.target.value })
+                    }
+                  >
+                    <option value="">Choose Category</option>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Bags">Bags & Backpacks</option>
+                    <option value="Documents">ID & Documents</option>
+                    <option value="Keys">Keys</option>
+                    <option value="Clothing">Clothing</option>
+                    <option value="Jewelry">Jewelry & Accessories</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </label>
+
+                <label>
+                  Location
+                  <input
+                    required
+                    value={form.location}
+                    onChange={(e) =>
+                      setForm({ ...form, location: e.target.value })
+                    }
+                    placeholder="e.g. Main Library 2nd Floor"
+                  />
+                </label>
+              </div>
+
+              <label>
+                Date Occurred
+                <input
+                  required
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                />
+              </label>
+
+              <label>
+                Item Description
+                <textarea
+                  required
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                  placeholder="Provide distinct marks, color details, or features..."
+                />
+              </label>
+
+              <label>
+                Item Photograph
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setForm((prev) => ({
+                          ...prev,
+                          image: reader.result as string,
+                        }));
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                {form.image && (
+                  <div className="photo-preview">
+                    <img src={form.image} alt="Selected preview" />
+                  </div>
+                )}
+              </label>
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="cancel-button"
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingId(null);
+                    setForm(emptyForm);
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="submit-button"
+                  disabled={saving}
+                >
+                  {saving
+                    ? "Submitting..."
+                    : editingId
+                    ? "Update Record"
+                    : "Post Report"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       )}
 
       {/* Items Section */}
       <section className="items-section" id="items">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">
-              COMMUNITY REPORTS
-            </span>
-
-            <h2>Lost & Found Items</h2>
-
-            <p>
-              Browse items reported by the community.
-            </p>
+            <span className="eyebrow">CAMPUS RECORDS</span>
+            <h2>Lost & Found Feed</h2>
           </div>
 
-          <span className="item-count">
-            {items.length} items
-          </span>
+          <span className="item-count">{filteredItems.length} Records</span>
         </div>
 
-        {/* Search */}
-        <div className="search-box">
-          <span>🔎</span>
-
-          <input
-            type="text"
-            placeholder="Search by item name, location, or category..."
-            value={searchTerm}
-            onChange={(e) =>
-              setSearchTerm(e.target.value)
-            }
-          />
-
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={() => setSearchTerm("")}
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        {/* Category Filter */}
-        <div className="category-filter">
-          <label htmlFor="categoryFilter">
-            Category:
-          </label>
-
-          <select
-            id="categoryFilter"
-            value={categoryFilter}
-            onChange={(e) =>
-              setCategoryFilter(e.target.value)
-            }
-          >
-            <option value="ALL">All Categories</option>
-            <option value="Electronics">Electronics</option>
-            <option value="Bags">Bags</option>
-            <option value="Documents">Documents</option>
-            <option value="Keys">Keys</option>
-            <option value="Clothing">Clothing</option>
-            <option value="Jewelry">Jewelry</option>
-            <option value="Pets">Pets</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-
-        {/* Lost / Found Filter */}
-        <div className="filters">
-          <button
-  className={
-    filter === "MY" ? "filter active" : "filter"
-  }
-  onClick={() => setFilter("MY")}
->
-  👤 My Items
-</button>
-          {(["ALL", "LOST", "FOUND"] as const).map(
-            (value) => (
+        {/* Filter Toolbar */}
+        <div className="toolbar">
+          <div className="search-box">
+            <span>🔎</span>
+            <input
+              type="text"
+              placeholder="Search by title, location, or category..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
               <button
-                key={value}
-                className={
-                  filter === value ? "filter active" : "filter"
-                }
-                onClick={() => setFilter(value)}
+                type="button"
+                className="clear-btn"
+                onClick={() => setSearchTerm("")}
               >
-                {value === "ALL"
-                  ? "All items"
-                  : value === "LOST"
-                    ? "🔴 Lost items"
-                    : "🟢 Found items"}
+                ✕
               </button>
-            )
-          )}
+            )}
+          </div>
+
+          <div className="filter-group">
+            <select
+              className="category-select"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="ALL">All Categories</option>
+              <option value="Electronics">Electronics</option>
+              <option value="Bags">Bags</option>
+              <option value="Documents">Documents</option>
+              <option value="Keys">Keys</option>
+              <option value="Clothing">Clothing</option>
+              <option value="Jewelry">Jewelry</option>
+              <option value="Other">Other</option>
+            </select>
+
+            <div className="filters">
+              {currentUser && (
+                <button
+                  className={filter === "MY" ? "filter active" : "filter"}
+                  onClick={() => setFilter("MY")}
+                >
+                  👤 My Posts
+                </button>
+              )}
+              {(["ALL", "LOST", "FOUND"] as const).map((value) => (
+                <button
+                  key={value}
+                  className={filter === value ? "filter active" : "filter"}
+                  onClick={() => setFilter(value)}
+                >
+                  {value === "ALL"
+                    ? "All"
+                    : value === "LOST"
+                    ? "🔴 Lost"
+                    : "🟢 Found"}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {loading && (
-          <p className="message">Loading items...</p>
-        )}
-
-        {!loading && error && (
-          <p className="message error">{error}</p>
-        )}
+        {loading && <p className="message">Loading records...</p>}
+        {!loading && error && <p className="message error">{error}</p>}
 
         {!loading && !error && filteredItems.length === 0 && (
           <div className="empty-state">
             <span>🔍</span>
-            <h3>No items reported yet</h3>
-            <p>Reported items will appear here.</p>
+            <h3>No Records Match Your Search</h3>
+            <p>Try adjusting your search filters or check back later.</p>
           </div>
         )}
 
-        {/* Item Cards */}
+        {/* Item Grid */}
         <div className="items-grid">
           {filteredItems.map((item) => {
             const ownerId =
@@ -1071,85 +958,82 @@ return (
                 ? item.userId
                 : item.userId?._id;
 
-            const isOwner =
-              currentUser?.userId === ownerId;
+            const isOwner = currentUser?.userId === ownerId;
 
             return (
               <article className="item-card" key={item._id}>
-                {item.image ? (
-                  <img
-                    className="item-image"
-                    src={item.image}
-                    alt={item.title}
-                  />
-                ) : (
-                  <div className="item-placeholder">
-                    📦
-                  </div>
-                )}
-
-                <div className="item-content">
+                <div className="card-image-wrap">
+                  {item.image ? (
+                    <img
+                      className="item-image"
+                      src={item.image}
+                      alt={item.title}
+                    />
+                  ) : (
+                    <div className="item-placeholder">📦</div>
+                  )}
                   <span
-                    className={
-                      item.itemType === "LOST"
-                        ? "badge lost"
-                        : "badge found"
-                    }
+                    className={`badge ${item.itemType.toLowerCase()}`}
                   >
                     {item.itemType}
                   </span>
+                </div>
 
+                <div className="item-content">
                   <h3>{item.title}</h3>
                   <p>{item.description}</p>
 
                   <div className="item-meta">
-                    <span>📍 {item.location}</span>
-                    <span>🏷️ {item.category}</span>
-                    <span>
-                      📅 {new Date(item.date).toLocaleDateString()}
-                    </span>
+                    <div>
+                      <strong>Location</strong>
+                      <span>{item.location}</span>
+                    </div>
+                    <div>
+                      <strong>Category</strong>
+                      <span>{item.category}</span>
+                    </div>
+                    <div>
+                      <strong>Date</strong>
+                      <span>{new Date(item.date).toLocaleDateString()}</span>
+                    </div>
                   </div>
 
                   <div className="status-control">
-  <label htmlFor={`status-${item._id}`}>
-    Item Status:
-  </label>
+                    <label htmlFor={`status-${item._id}`}>Status:</label>
+                    <select
+                      id={`status-${item._id}`}
+                      value={item.status}
+                      disabled={!isOwner && currentUser?.role !== "ADMIN"}
+                      onChange={(e) =>
+                        handleStatusChange(item, e.target.value)
+                      }
+                    >
+                      <option value="OPEN">OPEN</option>
+                      <option value="MATCHED">MATCHED</option>
+                      <option value="RETURNED">RETURNED</option>
+                    </select>
+                  </div>
 
-  <select
-    id={`status-${item._id}`}
-    value={item.status}
-    disabled={!isOwner}
-    onChange={(e) =>
-      handleStatusChange(item, e.target.value)
-    }
-  >
-    <option value="OPEN">OPEN</option>
-    <option value="MATCHED">MATCHED</option>
-    <option value="RETURNED">RETURNED</option>
-  </select>
-</div>
-
-                  {/* Find Matches - visible for all items */}
                   <button
                     type="button"
                     className="match-button"
                     onClick={() => handleFindMatches(item)}
                   >
-                    🤖 Find Matches
+                    ⚡ Smart AI Match
                   </button>
 
-                  {/* Edit and Delete - owner only */}
-                  {isOwner && (
+                  {(isOwner || currentUser?.role === "ADMIN") && (
                     <div className="item-actions">
                       <button
                         type="button"
+                        className="btn-edit"
                         onClick={() => handleEdit(item)}
                       >
                         ✏️ Edit
                       </button>
-
                       <button
                         type="button"
+                        className="btn-delete"
                         onClick={() => handleDelete(item._id)}
                       >
                         🗑️ Delete
@@ -1163,130 +1047,87 @@ return (
         </div>
       </section>
 
-      {/* SMART MATCHING RESULTS */}
+      {/* SMART MATCHING RESULTS MODAL */}
       {matchingItem && (
-        <section className="items-section" id="matches">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">
-                SMART MATCHING RESULTS
-              </span>
+        <div className="modal-overlay">
+          <section className="form-section modal-card matches-modal">
+            <div className="form-heading">
+              <div>
+                <span className="eyebrow">AI MATCH ENGINE</span>
+                <h2>Matches for: {matchingItem.title}</h2>
+              </div>
 
-              <h2>Matches for {matchingItem.title}</h2>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => {
+                  setMatchingItem(null);
+                  setMatches([]);
+                  setMatchingError("");
+                }}
+              >
+                ✖
+              </button>
             </div>
 
-            <button
-              type="button"
-              className="cancel-button"
-              onClick={() => {
-                setMatchingItem(null);
-                setMatches([]);
-                setMatchingError("");
-              }}
-            >
-              ✖ Close
-            </button>
-          </div>
+            {matchingLoading && (
+              <p className="message">Analysing database for similarity matches...</p>
+            )}
 
-          {matchingLoading && (
-            <p className="message">
-              Finding matching items...
-            </p>
-          )}
+            {matchingError && (
+              <p className="message error">{matchingError}</p>
+            )}
 
-          {matchingError && (
-            <p className="message error">
-              {matchingError}
-            </p>
-          )}
-
-          {!matchingLoading &&
-            !matchingError &&
-            matches.length === 0 && (
+            {!matchingLoading && !matchingError && matches.length === 0 && (
               <div className="empty-state">
-                <h3>No matching items found</h3>
-                <p>There are no similar reports yet.</p>
+                <h3>No High Similarity Matches Found</h3>
+                <p>No item records currently meet score criteria.</p>
               </div>
             )}
 
-    
-
-          {!matchingLoading && matches.length > 0 && (
-            <div className="items-grid">
-              {matches.map((match) => (
-                <article
-                  className="item-card"
-                  key={match.item._id}
-                >
-                  {match.item.image ? (
-                    <img
-                      className="item-image"
-                      src={match.item.image}
-                      alt={match.item.title}
-                    />
-                  ) : (
-                    <div className="item-placeholder">
-                      📦
-                    </div>
-                  )}
-
-                  <div className="item-content">
-                    <span
-                      className={
-                        match.item.itemType === "LOST"
-                          ? "badge lost"
-                          : "badge found"
-                      }
-                    >
-                      {match.item.itemType}
-                    </span>
-
-                    <h3>{match.item.title}</h3>
-                    <p>{match.item.description}</p>
-
-                    <div className="item-meta">
-                      <span>📍 {match.item.location}</span>
-                      <span>🏷️ {match.item.category}</span>
-                      <span>
-                        📅{" "}
-                        {new Date(
-                          match.item.date
-                        ).toLocaleDateString()}
+            {!matchingLoading && matches.length > 0 && (
+              <div className="items-grid modal-grid">
+                {matches.map((match) => (
+                  <article className="item-card" key={match.item._id}>
+                    <div className="card-image-wrap">
+                      {match.item.image ? (
+                        <img
+                          className="item-image"
+                          src={match.item.image}
+                          alt={match.item.title}
+                        />
+                      ) : (
+                        <div className="item-placeholder">📦</div>
+                      )}
+                      <span className="match-score-badge">
+                        {match.matchScore}% Match
                       </span>
                     </div>
 
-                    <div className="match-score">
-                      {match.matchScore}% Match
-                    </div>
+                    <div className="item-content">
+                      <h3>{match.item.title}</h3>
+                      <p>{match.item.description}</p>
 
-                    <div className="match-reasons">
-                      <strong>Why it matches:</strong>
-
-                      {match.matchedReasons.length > 0 ? (
+                      <div className="match-reasons">
+                        <strong>Match Reasons:</strong>
                         <ul>
-                          {match.matchedReasons.map(
-                            (reason, index) => (
-                              <li key={index}>{reason}</li>
-                            )
-                          )}
+                          {match.matchedReasons.map((reason, idx) => (
+                            <li key={idx}>✓ {reason}</li>
+                          ))}
                         </ul>
-                      ) : (
-                        <p>Some item details are similar.</p>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       )}
 
       {/* Footer */}
       <footer className="footer">
-        <p>
-          FindIt — Helping lost belongings find their way home.
-        </p>
+        <p>© UniFind Smart Lost & Found Network — University Portal</p>
       </footer>
     </main>
   );
