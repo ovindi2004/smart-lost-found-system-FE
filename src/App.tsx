@@ -67,13 +67,23 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<{
-    userId: string;
-    name: string;
-    email: string;
-    role: "USER" | "ADMIN";
-    token: string;
-  } | null>(null);
+  userId: string;
+  name: string;
+  email: string;
+  role: "USER" | "ADMIN";
+  token: string;
+} | null>(() => {
+  const savedUser = localStorage.getItem("currentUser");
 
+  if (!savedUser) return null;
+
+  try {
+    return JSON.parse(savedUser);
+  } catch {
+    localStorage.removeItem("currentUser");
+    return null;
+  }
+});
   const [filter, setFilter] = useState<"ALL" | "LOST" | "FOUND" | "MY">("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
@@ -367,9 +377,10 @@ function App() {
                 type="button"
                 className="btn-logout"
                 onClick={() => {
-                  setCurrentUser(null);
-                  setNotice("Logged out successfully!");
-                }}
+                  localStorage.removeItem("currentUser");
+                   setCurrentUser(null);
+                   setNotice("Logged out successfully!");
+                  }}
               >
                 Logout
               </button>
@@ -602,14 +613,23 @@ function App() {
                     if (!loginResponse.ok) throw new Error(loginResult.message);
                     data = loginResult.data;
                   }
+                  const loggedInUser: {
+                  userId: string;
+                  name: string;
+                  email: string;
+                  role: "USER" | "ADMIN";
+                  token: string;
+                } = {
+                   userId: data.userId,
+                   name: data.name,
+                   email: data.email,
+                   role: data.role,
+                   token: data.token,
+                  };
 
-                  setCurrentUser({
-                    userId: data.userId,
-                    name: data.name,
-                    email: data.email,
-                    role: data.role,
-                    token: data.token,
-                  });
+localStorage.setItem("currentUser", JSON.stringify(loggedInUser));
+setCurrentUser(loggedInUser);
+                  
 
                   setAuthMode(null);
                   setAuthForm({ name: "", email: "", password: "" });
