@@ -52,6 +52,11 @@ interface Claim {
   createdAt?: string;
 }
 
+interface ChatMessage {
+  role: "user" | "bot";
+  text: string;
+}
+
 const emptyForm = {
   title: "",
   description: "",
@@ -121,12 +126,80 @@ function App() {
   const [matchingLoading, setMatchingLoading] = useState(false);
   const [matchingError, setMatchingError] = useState("");
 
-  // Claim System states
+ // Claim System states
 const [claims, setClaims] = useState<Claim[]>([]);
+const [submittedClaims, setSubmittedClaims] = useState<Claim[]>([]);
 const [claimItem, setClaimItem] = useState<Item | null>(null);
 const [proofDescription, setProofDescription] = useState("");
 const [claimLoading, setClaimLoading] = useState(false);
 const [claimMessage, setClaimMessage] = useState("");
+
+// CHATBOT STATES
+const [chatOpen, setChatOpen] = useState(false);
+const [chatInput, setChatInput] = useState("");
+const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+  {
+    role: "bot",
+    text: "Hello! 👋 Welcome to UniFind. How can I help you today?",
+  },
+]);
+const [chatLoading, setChatLoading] = useState(false);
+
+// SEND CHATBOT MESSAGE
+const handleSendChatMessage = async (
+  event: FormEvent<HTMLFormElement>
+) => {
+  event.preventDefault();
+
+  const message = chatInput.trim();
+
+  if (!message || chatLoading) return;
+
+  setChatMessages((prev) => [
+    ...prev,
+    { role: "user", text: message },
+  ]);
+
+  setChatInput("");
+  setChatLoading(true);
+
+  try {
+    const response = await fetch("http://localhost:5000/api/chatbot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Chatbot is unavailable.");
+    }
+
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        role: "bot",
+        text: result.reply || "Sorry, I couldn't answer that.",
+      },
+    ]);
+  } catch (error) {
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        role: "bot",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong. Please try again.",
+      },
+    ]);
+  } finally {
+    setChatLoading(false);
+  }
+};
 
   // Load all items
   const loadItems = async () => {
@@ -176,11 +249,12 @@ const [claimMessage, setClaimMessage] = useState("");
   }, [currentUser]);
 
 
-  // LOAD CLAIMS
+// LOAD CLAIMS
 useEffect(() => {
   const fetchClaims = async () => {
     if (!currentUser) {
       setClaims([]);
+      setSubmittedClaims([]);
       return;
     }
 
@@ -202,6 +276,29 @@ useEffect(() => {
         setClaims(result.data || []);
       } else {
         console.error("Failed to load claims:", result.message);
+      }
+
+      // LOAD CLAIMS SUBMITTED BY USER
+      if (currentUser.role === "USER") {
+        const submittedResponse = await fetch(
+          "http://localhost:5000/api/claims/submitted",
+          {
+            headers: {
+              Authorization: `Bearer ${currentUser.token}`,
+            },
+          }
+        );
+
+        const submittedResult = await submittedResponse.json();
+
+        if (submittedResponse.ok) {
+          setSubmittedClaims(submittedResult.data || []);
+        } else {
+          console.error(
+            "Failed to load submitted claims:",
+            submittedResult.message
+          );
+        }
       }
     } catch (error) {
       console.error("Error loading claims:", error);
@@ -281,6 +378,22 @@ const handleSubmitClaim = async (event: FormEvent<HTMLFormElement>) => {
     setClaimItem(null);
 
     setNotice("Your claim request has been submitted!");
+
+    const submittedResponse = await fetch(
+  "http://localhost:5000/api/claims/submitted",
+  {
+    headers: {
+      Authorization: `Bearer ${currentUser.token}`,
+    },
+  }
+);
+
+const submittedResult = await submittedResponse.json();
+
+if (submittedResponse.ok) {
+  console.log("MY SUBMITTED CLAIMS RESPONSE:", submittedResult);
+  setSubmittedClaims(submittedResult.data || []);
+}
   } catch (err) {
     setClaimMessage(
       err instanceof Error ? err.message : "Something went wrong."
@@ -758,6 +871,79 @@ const handleUpdateClaim = async (
     </div>
   )}
 </div>
+
+{/* MY SUBMITTED CLAIMS */}
+{currentUser.role === "USER" && (
+  <div className="user-management">
+    <div className="um-header">
+      <div>
+        <span className="um-eyebrow">
+          📤 MY CLAIM REQUESTS
+        </span>
+        <h3>My Submitted Claims</h3>
+      </div>
+
+      <span className="badge-count">
+        Total: {submittedClaims.length}
+      </span>
+    </div>
+
+    {submittedClaims.length === 0 ? (
+      <div className="empty-state">
+        <h3>No Submitted Claims Yet</h3>
+        <p>Your submitted claim requests will appear here.</p>
+      </div>
+    ) : (
+      <div className="users-table-wrap">
+        <table className="users-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Item Owner</th>
+              <th>Ownership Proof</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {submittedClaims.map((claim) => {
+              const item =
+                typeof claim.itemId === "string"
+                  ? null
+                  : claim.itemId;
+
+              return (
+                <tr key={claim._id}>
+                  <td className="cell-name">
+                    {item?.title || "Item"}
+                  </td>
+
+                  <td>
+                    {claim.ownerId?.name || "Unknown"}
+                    <br />
+                    <small>
+                      {claim.ownerId?.email || ""}
+                    </small>
+                  </td>
+
+                  <td>{claim.proofDescription}</td>
+
+                  <td>
+                    <span
+                      className={`role-badge ${claim.status.toLowerCase()}`}
+                    >
+                      {claim.status}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+)}
 
           {/* ADMIN USER MANAGEMENT */}
           {currentUser.role === "ADMIN" && (
@@ -1509,6 +1695,79 @@ setCurrentUser(loggedInUser);
     </section>
   </div>
 )}
+      {/* UNIFIND AI CHATBOT */}
+      <div className="chatbot-container">
+        {!chatOpen && (
+          <button
+            type="button"
+            className="chatbot-toggle"
+            onClick={() => setChatOpen(true)}
+          >
+            
+            <span>Chat with AI</span>
+          </button>
+        )}
+
+        {chatOpen && (
+          <div className="chatbot-window">
+            <div className="chatbot-header">
+              <div>
+                <h3> UniFind AI Assistant</h3>
+                <p>How can I help you?</p>
+              </div>
+
+              <button
+                type="button"
+                className="chatbot-close"
+                onClick={() => setChatOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="chatbot-messages">
+              {chatMessages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`chat-message ${
+                    message.role === "user" ? "chat-user" : "chat-bot"
+                  }`}
+                >
+                  {message.text}
+                </div>
+              ))}
+
+              {chatLoading && (
+                <div className="chat-message chat-bot">
+                  Typing...
+                </div>
+              )}
+            </div>
+
+            <form
+              className="chatbot-form"
+              onSubmit={handleSendChatMessage}
+            >
+              <input
+                type="text"
+                className="chatbot-input"
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder="Ask me anything..."
+                disabled={chatLoading}
+              />
+
+              <button
+                type="submit"
+                className="chatbot-send"
+                disabled={chatLoading || !chatInput.trim()}
+              >
+                ➤
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
 
       {/* Footer */}
       <footer className="footer">
