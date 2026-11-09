@@ -443,7 +443,36 @@ useEffect(() => {
   void fetchNotifications();
 }, [currentUser?.token]);
 
- 
+ // DELETE NOTIFICATION AFTER SEEN
+const handleDeleteNotification = async (notificationId: string) => {
+  if (!currentUser?.token) return;
+
+  try {
+    const response = await fetch(
+      `http://localhost:5000/api/notifications/${notificationId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${currentUser.token}`,
+        },
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to delete notification.");
+    }
+
+    setNotifications((prev) =>
+      prev.filter((notification) => notification._id !== notificationId)
+    );
+
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+  } catch (error) {
+    console.error("Delete notification error:", error);
+  }
+};
 
   // FIND SMART MATCHES
   const handleFindMatches = async (item: Item) => {
@@ -830,16 +859,23 @@ const handleUpdateClaim = async (
     ) : (
       notifications.map((notification) => (
         <div
-          key={notification._id}
-          className="notification-item"
+         key={notification._id}
+  className="notification-item"
+  onClick={() => handleDeleteNotification(notification._id)}
+  style={{ cursor: "pointer" }}
         >
           <p>{notification.message}</p>
 
           <small>
+            
             {notification.createdAt
               ? new Date(notification.createdAt).toLocaleString()
               : ""}
+              
           </small>
+
+        
+          
         </div>
       ))
     )}
