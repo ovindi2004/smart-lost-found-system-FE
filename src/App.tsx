@@ -56,6 +56,14 @@ interface ChatMessage {
   role: "user" | "bot";
   text: string;
 }
+interface Notification {
+  _id: string;
+  message: string;
+  type: "CLAIM_REQUEST" | "CLAIM_APPROVED" | "CLAIM_REJECTED";
+  isRead: boolean;
+  relatedItemId?: string;
+  createdAt?: string;
+}
 
 const emptyForm = {
   title: "",
@@ -134,6 +142,12 @@ const [proofDescription, setProofDescription] = useState("");
 const [claimLoading, setClaimLoading] = useState(false);
 const [claimMessage, setClaimMessage] = useState("");
 
+
+// NOTIFICATION STATES
+const [notifications, setNotifications] = useState<Notification[]>([]);
+const [unreadCount, setUnreadCount] = useState(0);
+const [showNotifications, setShowNotifications] = useState(false);
+
 // CHATBOT STATES
 const [chatOpen, setChatOpen] = useState(false);
 const [chatInput, setChatInput] = useState("");
@@ -145,6 +159,11 @@ const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
 ]);
 const [chatLoading, setChatLoading] = useState(false);
 
+
+// IMAGE RECOGNITION STATES
+const [imageRecognitionLoading, setImageRecognitionLoading] = useState(false);
+const [imageRecognitionResult, setImageRecognitionResult] = useState("");
+const [imageRecognitionError, setImageRecognitionError] = useState("");
 // SEND CHATBOT MESSAGE
 const handleSendChatMessage = async (
   event: FormEvent<HTMLFormElement>
@@ -199,6 +218,77 @@ const handleSendChatMessage = async (
   } finally {
     setChatLoading(false);
   }
+};
+
+// AI IMAGE RECOGNITION
+const handleRecognizeImage = async (file: File) => {
+  setImageRecognitionLoading(true);
+  setImageRecognitionResult("");
+  setImageRecognitionError("");
+
+  const reader = new FileReader();
+
+  reader.onloadend = async () => {
+    const imageData = reader.result as string;
+
+    setForm((prev) => ({
+      ...prev,
+      image: imageData,
+    }));
+
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/image-recognition",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ image: imageData }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Image recognition failed."
+        );
+      }
+
+      const aiResult = result.result || "";
+
+try {
+  const parsedResult = JSON.parse(aiResult);
+
+  setForm((prev) => ({
+    ...prev,
+    title: parsedResult.title || prev.title,
+    category: parsedResult.category || prev.category,
+    description: parsedResult.description || prev.description,
+  }));
+
+  setImageRecognitionResult(aiResult);
+} catch {
+  setImageRecognitionResult(aiResult);
+}
+    } catch (error) {
+      setImageRecognitionError(
+        error instanceof Error
+          ? error.message
+          : "Image recognition failed."
+      );
+    } finally {
+      setImageRecognitionLoading(false);
+    }
+  };
+
+  reader.onerror = () => {
+    setImageRecognitionError("Could not read the selected image.");
+    setImageRecognitionLoading(false);
+  };
+
+  reader.readAsDataURL(file);
 };
 
   // Load all items
@@ -307,6 +397,53 @@ useEffect(() => {
 
   void fetchClaims();
 }, [currentUser]);
+
+
+// LOAD USER NOTIFICATIONS
+useEffect(() => {
+  const fetchNotifications = async () => {
+    if (!currentUser?.token) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/notifications",
+        {
+          headers: {
+            Authorization: `Bearer ${currentUser.token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to load notifications."
+        );
+      }
+
+      const notificationList: Notification[] = result.data || [];
+
+      setNotifications(notificationList);
+
+      setUnreadCount(
+        notificationList.filter(
+          (notification) => !notification.isRead
+        ).length
+      );
+    } catch (error) {
+      console.error("Notification loading error:", error);
+    }
+  };
+
+  void fetchNotifications();
+}, [currentUser?.token]);
+
+ 
 
   // FIND SMART MATCHES
   const handleFindMatches = async (item: Item) => {
@@ -653,21 +790,62 @@ const handleUpdateClaim = async (
 
         <div className="auth-buttons">
           {currentUser ? (
-            <div className="user-profile-badge">
-              <span className="user-name">Hi, {currentUser.name}</span>
-              <span className="role-tag">{currentUser.role}</span>
-              <button
-                type="button"
-                className="btn-logout"
-                onClick={() => {
-                  localStorage.removeItem("currentUser");
-                   setCurrentUser(null);
-                   setNotice("Logged out successfully!");
-                  }}
-              >
-                Logout
-              </button>
-            </div>
+           <div className="user-profile-badge">
+  <button
+    type="button"
+    className="notification-bell"
+    onClick={() => setShowNotifications(!showNotifications)}
+  >
+    🔔
+    {unreadCount > 0 && (
+      <span className="notification-count">
+        {unreadCount}
+      </span>
+    )}
+  </button>
+
+  <span className="user-name">Hi, {currentUser.name}</span>
+  <span className="role-tag">{currentUser.role}</span>
+
+  <button
+    type="button"
+    className="btn-logout"
+    onClick={() => {
+      localStorage.removeItem("currentUser");
+      setCurrentUser(null);
+      setNotice("Logged out successfully!");
+    }}
+  >
+    Logout
+  </button>
+  {showNotifications && (
+  <div className="notification-panel">
+    <div className="notification-panel-header">
+      <strong>Notifications</strong>
+      <span>{unreadCount} unread</span>
+    </div>
+
+    {notifications.length === 0 ? (
+      <p>No notifications yet.</p>
+    ) : (
+      notifications.map((notification) => (
+        <div
+          key={notification._id}
+          className="notification-item"
+        >
+          <p>{notification.message}</p>
+
+          <small>
+            {notification.createdAt
+              ? new Date(notification.createdAt).toLocaleString()
+              : ""}
+          </small>
+        </div>
+      ))
+    )}
+  </div>
+)}
+</div>
           ) : (
             <div className="auth-action-btns">
               <button
@@ -1294,30 +1472,68 @@ setCurrentUser(loggedInUser);
               </label>
 
               <label>
-                Item Photograph
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setForm((prev) => ({
-                          ...prev,
-                          image: reader.result as string,
-                        }));
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-                {form.image && (
-                  <div className="photo-preview">
-                    <img src={form.image} alt="Selected preview" />
-                  </div>
-                )}
-              </label>
+  Item Photograph
+
+  <input
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+
+      if (file) {
+        setForm((prev) => ({
+          ...prev,
+          image: "",
+        }));
+
+        setImageRecognitionResult("");
+        setImageRecognitionError("");
+        handleRecognizeImage(file);
+      }
+    }}
+  />
+
+  {form.image && (
+    <div className="photo-preview">
+      <img src={form.image} alt="Selected preview" />
+    </div>
+  )}
+
+  <button
+    type="button"
+    className="match-button"
+    disabled={!form.image || imageRecognitionLoading}
+    onClick={() => {
+      setImageRecognitionResult("");
+      setImageRecognitionError("");
+      // Image is already analyzed after upload.
+      // This button displays the completed result.
+    }}
+  >
+    {imageRecognitionLoading
+      ? "🤖 Analyzing Image..."
+      : "🤖 Recognize Image"}
+  </button>
+
+  {imageRecognitionLoading && (
+    <p className="message">
+      🤖 AI is analyzing your image...
+    </p>
+  )}
+
+  {imageRecognitionResult && (
+    <div className="ai-recognition-result">
+      <h4>🤖 AI Image Recognition Result</h4>
+      <p>{imageRecognitionResult}</p>
+    </div>
+  )}
+
+  {imageRecognitionError && (
+    <p className="message error">
+      {imageRecognitionError}
+    </p>
+  )}
+</label>
 
               <div className="form-actions">
                 <button
