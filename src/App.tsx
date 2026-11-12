@@ -86,6 +86,20 @@ function App() {
   const foundItems = items.filter((item) => item.itemType === "FOUND").length;
   const matchedItems = items.filter((item) => item.status === "MATCHED").length;
   const returnedItems = items.filter((item) => item.status === "RETURNED").length;
+  // CATEGORY REPORT DATA
+const categoryReports = [
+  "Electronics",
+  "Bags",
+  "Documents",
+  "Keys",
+  "Clothing",
+  "Jewelry",
+  "Pets",
+  "Other",
+].map((category) => ({
+  category,
+  count: items.filter((item) => item.category === category).length,
+}));
 
   const [authMode, setAuthMode] = useState<"login" | "register" | null>(null);
   const [authForm, setAuthForm] = useState({
@@ -977,6 +991,38 @@ const handleUpdateClaim = async (
               <p>{returnedItems}</p>
             </div>
           </div>
+
+          {/* ADMIN REPORTS & ANALYTICS */}
+{currentUser.role === "ADMIN" && (
+  <div className="analytics-section">
+    <h3>📊 Item Category Analytics</h3>
+    <p>Overview of reported items by category</p>
+
+    <div className="analytics-list">
+      {categoryReports.map((report) => (
+        <div className="analytics-item" key={report.category}>
+          <div className="analytics-info">
+            <span>{report.category}</span>
+            <strong>{report.count}</strong>
+          </div>
+
+          <div className="analytics-bar">
+            <div
+              className="analytics-fill"
+              style={{
+                width: `${
+                  totalItems === 0
+                    ? 0
+                    : (report.count / totalItems) * 100
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
 
           {/* CLAIMS MANAGEMENT */}
