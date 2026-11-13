@@ -1019,3 +1019,353 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (max-width: 720px) {
   .notification-bell { margin-right: 8px; }
 }
+
+
+
+/* =================================
+   UNIFIND - MOBILE RESPONSIVE FIX
+================================= */
+
+/* Tablet */
+@media (max-width: 720px) {
+  .navbar {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .brand-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand-title {
+    font-size: 19px;
+  }
+
+  .auth-buttons {
+    gap: 6px;
+  }
+
+  .auth-action-btns {
+    gap: 6px;
+  }
+
+  .btn-login,
+  .btn-register,
+  .btn-logout {
+    padding: 8px 11px;
+    font-size: 11px;
+  }
+
+  .notification-bell {
+    width: 38px;
+    height: 38px;
+    margin-right: 4px;
+  }
+
+  .hero {
+    width: calc(100% - 32px);
+    margin-top: 20px;
+    padding: 28px 22px;
+    border-radius: 20px;
+  }
+
+  .hero h1 {
+    font-size: clamp(30px, 8vw, 42px);
+  }
+
+  .hero > p {
+    font-size: 14px;
+  }
+
+  .dashboard,
+  .items-section {
+    width: calc(100% - 32px);
+  }
+
+  .dashboard-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .dashboard-card {
+    padding: 16px;
+  }
+
+  .dashboard-card p {
+    font-size: 26px;
+  }
+
+  .items-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .toolbar {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .search-box {
+    flex-basis: 100%;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .category-select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .users-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .users-table {
+    min-width: 600px;
+  }
+
+  .analytics-info {
+    font-size: 12px;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .form-section {
+    padding: 20px 16px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .navbar {
+    padding: 10px 12px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 17px;
+    border-radius: 9px;
+  }
+
+  .brand-title {
+    font-size: 17px;
+  }
+
+  .auth-buttons {
+    gap: 4px;
+  }
+
+  .auth-action-btns {
+    gap: 5px;
+  }
+
+  .btn-login,
+  .btn-register,
+  .btn-logout {
+    padding: 7px 9px;
+    font-size: 10px;
+  }
+
+  .notification-bell {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+
+  .user-profile-badge {
+    gap: 5px;
+  }
+
+  .role-tag {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+
+  .hero {
+    width: calc(100% - 24px);
+    margin-top: 14px;
+    padding: 24px 18px;
+    border-radius: 18px;
+  }
+
+  .hero h1 {
+    font-size: 30px;
+    line-height: 1.15;
+  }
+
+  .hero > p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .hero-button {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .dashboard,
+  .items-section {
+    width: calc(100% - 24px);
+    margin-top: 24px;
+  }
+
+  .dashboard > h2 {
+    font-size: 18px;
+  }
+
+  .dashboard-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .dashboard-card {
+    padding: 13px 11px;
+    border-radius: 14px;
+  }
+
+  .dashboard-card h3 {
+    font-size: 9px;
+  }
+
+  .dashboard-card p {
+    font-size: 24px;
+  }
+
+  .section-heading {
+    gap: 10px;
+  }
+
+  .section-heading h2 {
+    font-size: 23px;
+  }
+
+  .toolbar {
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .category-select {
+    width: 100%;
+  }
+
+  .filters {
+    width: 100%;
+  }
+
+  .filter {
+    padding: 8px 5px;
+    font-size: 11px;
+  }
+
+  .items-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .card-image-wrap {
+    height: 200px;
+  }
+
+  .item-content {
+    padding: 16px;
+  }
+
+  .user-management,
+  .analytics-section {
+    padding: 18px 14px;
+    border-radius: 18px;
+  }
+
+  .um-header h3,
+  .analytics-section h3 {
+    font-size: 18px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-section {
+    padding: 18px 14px;
+    border-radius: 18px;
+  }
+
+  .form-heading h2 {
+    font-size: 17px;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .cancel-button,
+  .submit-button {
+    width: 100%;
+  }
+
+  .modal-grid {
+    grid-template-columns: 1fr;
+    max-height: 55vh;
+  }
+
+  .notification-panel {
+    position: fixed;
+    top: 70px;
+    right: 12px;
+    width: calc(100vw - 24px);
+  }
+
+  .footer {
+    margin-top: 48px;
+    padding: 22px 12px;
+  }
+
+  .chatbot-window {
+    width: calc(100vw - 24px);
+    height: min(72vh, 560px);
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  .brand-title {
+    font-size: 15px;
+  }
+
+  .btn-login,
+  .btn-register,
+  .btn-logout {
+    padding: 6px 7px;
+    font-size: 9px;
+  }
+
+  .dashboard-card p {
+    font-size: 21px;
+  }
+
+  .hero h1 {
+    font-size: 27px;
+  }
+}

@@ -162,6 +162,7 @@ const [notifications, setNotifications] = useState<Notification[]>([]);
 const [unreadCount, setUnreadCount] = useState(0);
 const [showNotifications, setShowNotifications] = useState(false);
 
+
 // CHATBOT STATES
 const [chatOpen, setChatOpen] = useState(false);
 const [chatInput, setChatInput] = useState("");
@@ -660,110 +661,192 @@ const handleUpdateClaim = async (
   };
 
   // Delete item
-  const handleDelete = async (id: string) => {
-    const confirmed = window.confirm("Are you sure you want to delete this item?");
-    if (!confirmed) return;
+  // Delete item
+const handleDelete = async (id: string) => {
+  if (!currentUser) {
+    setNotice("Please login first.");
+    return;
+  }
 
-    try {
-      const response = await fetch(`http://localhost:5000/api/items/${id}`, {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this item?"
+  );
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch(
+      `http://localhost:5000/api/items/${id}`,
+      {
         method: "DELETE",
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to delete item.");
+        headers: {
+          Authorization: `Bearer ${currentUser.token}`,
+        },
       }
+    );
 
-      setNotice("Item deleted successfully!");
-      await loadItems();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Something went wrong.");
-    }
-  };
+    const result = await response.json();
 
-  // UPDATE ITEM STATUS
-  const handleStatusChange = async (item: Item, newStatus: string) => {
-    try {
-      const response = await fetch(
-        `http://localhost:5000/api/items/${item._id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ status: newStatus }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to update status.");
-      }
-
-      setNotice("Item status updated successfully!");
-      await loadItems();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Something went wrong.");
-    }
-  };
-
-  // Create or update item
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setNotice("");
-
-    if (!currentUser) {
-      setNotice("Please login before reporting an item.");
-      setShowForm(false);
-      setAuthMode("login");
-      return;
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to delete item.");
     }
 
-    setSaving(true);
+    setNotice("Item deleted successfully!");
+    await loadItems();
+  } catch (err) {
+    console.error("Delete item error:", err);
 
-    try {
-      const itemData = {
-        ...form,
-        userId: currentUser.userId,
-      };
+    setNotice(
+      err instanceof TypeError
+        ? "Unable to connect to the server. Please check your connection."
+        : err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+    );
+  }
+};
 
-      const url = editingId
-        ? `http://localhost:5000/api/items/${editingId}`
-        : "http://localhost:5000/api/items";
+  
+ // UPDATE ITEM STATUS
+const handleStatusChange = async (item: Item, newStatus: string) => {
+  if (!currentUser) {
+    setNotice("Please login first.");
+    return;
+  }
 
-      const response = await fetch(url, {
-        method: editingId ? "PUT" : "POST",
+  try {
+    const response = await fetch(
+      `http://localhost:5000/api/items/${item._id}`,
+      {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${currentUser.token}`,
         },
-        body: JSON.stringify(itemData),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to save item.");
+        body: JSON.stringify({
+          title: item.title,
+          description: item.description,
+          category: item.category,
+          itemType: item.itemType,
+          location: item.location,
+          date: item.date,
+          image: item.image || "",
+          status: newStatus,
+        }),
       }
+    );
 
-      setNotice(
-        editingId
-          ? "Item updated successfully!"
-          : "Item reported successfully!"
-      );
+    const result = await response.json();
 
-      setForm(emptyForm);
-      setEditingId(null);
-      setShowForm(false);
-
-      await loadItems();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setSaving(false);
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to update status.");
     }
-  };
+
+    setNotice("Item status updated successfully!");
+    await loadItems();
+  } catch (err) {
+    console.error("Update item status error:", err);
+
+    setNotice(
+      err instanceof TypeError
+        ? "Unable to connect to the server. Please check your connection."
+        : err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+    );
+  }
+};
+
+  
+// Create or update item
+const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
+  setNotice("");
+
+  if (!currentUser) {
+    setNotice("Please login before reporting an item.");
+    setShowForm(false);
+    setAuthMode("login");
+    return;
+  }
+
+  if (!form.title.trim()) {
+    setNotice("Please enter the item title.");
+    return;
+  }
+
+  if (!form.category) {
+    setNotice("Please select an item category.");
+    return;
+  }
+
+  if (!form.location.trim()) {
+    setNotice("Please enter the item location.");
+    return;
+  }
+
+  if (!form.date) {
+    setNotice("Please select the date.");
+    return;
+  }
+
+  if (!form.description.trim()) {
+    setNotice("Please enter the item description.");
+    return;
+  }
+
+  setSaving(true);
+
+  try {
+    const itemData = {
+      ...form,
+      userId: currentUser.userId,
+    };
+
+    const url = editingId
+      ? `http://localhost:5000/api/items/${editingId}`
+      : "http://localhost:5000/api/items";
+
+    const response = await fetch(url, {
+      method: editingId ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${currentUser.token}`,
+      },
+      body: JSON.stringify(itemData),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Failed to save item.");
+    }
+
+    setNotice(
+      editingId
+        ? "Item updated successfully!"
+        : "Item reported successfully!"
+    );
+
+    setForm(emptyForm);
+    setEditingId(null);
+    setShowForm(false);
+
+    await loadItems();
+  } catch (err) {
+    console.error("Save item error:", err);
+
+    setNotice(
+      err instanceof TypeError
+        ? "Unable to connect to the server. Please check your connection."
+        : err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+    );
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   // Search and filter
   const filteredItems = items.filter((item) => {
