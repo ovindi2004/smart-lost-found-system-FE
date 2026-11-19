@@ -404,6 +404,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* ============ FORMS ============ */
 .item-form { display: flex; flex-direction: column; gap: 16px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.report-type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .item-form label {
   display: flex; flex-direction: column; gap: 6px;
   font-size: 12px;
@@ -685,6 +686,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   }
   .nav-links-wrap.mobile-open {
     display: flex;
+    max-height: calc(100vh - 75px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 @media (max-width: 720px) {
@@ -1219,6 +1223,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .form-section {
     padding: 20px 16px;
+  }
+
+  .item-form input,
+  .item-form select,
+  .item-form textarea,
+  .chatbot-input,
+  .search-box input {
+    font-size: 16px;
   }
 }
 
