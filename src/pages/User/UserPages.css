@@ -1,0 +1,135 @@
+/* ============ USER PAGES STYLING ============ */
+.user-page {
+  padding: 32px var(--gutter) 60px;
+}
+
+.user-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.user-page-header h1 {
+  font-size: clamp(26px, 4vw, 36px);
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.user-page-header p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.user-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.user-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--line-strong);
+  margin-bottom: 24px;
+}
+
+.user-tab {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  transition: all 0.2s;
+}
+
+.user-tab.active {
+  background: var(--cyan);
+  color: #020617;
+}
+
+.claims-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.claim-card {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line-strong);
+  transition: border-color 0.2s;
+}
+
+.claim-card:hover {
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+.claim-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.claim-proof {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+  color: #e2e8f0;
+  line-height: 1.5;
+}
+
+.claim-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.btn-approve {
+  flex: 1;
+  padding: 9px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.btn-approve:hover {
+  background: rgba(16, 185, 129, 0.35);
+}
+
+.btn-reject {
+  flex: 1;
+  padding: 9px;
+  border-radius: 10px;
+  background: rgba(244, 63, 94, 0.2);
+  border: 1px solid rgba(244, 63, 94, 0.5);
+  color: #fda4af;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.btn-reject:hover {
+  background: rgba(244, 63, 94, 0.35);
+}

@@ -1,0 +1,175 @@
+/* ========================================================
+   UniFind - Minimal, Elegant & Professional Footer
+   ======================================================== */
+
+.minimal-footer {
+  width: 100%;
+  margin-top: 60px;
+  background: rgba(3, 7, 18, 0.92);
+  border-top: 1px solid rgba(56, 189, 248, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #94a3b8;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.minimal-footer-container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 24px 20px;
+  box-sizing: border-box;
+}
+
+/* Top Row: Brand & Links */
+.minimal-footer-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* Brand Section */
+.minimal-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.minimal-footer-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.minimal-footer-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: radial-gradient(circle at 30% 30%, rgba(56, 189, 248, 0.25), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.minimal-footer-logo:hover .minimal-footer-icon {
+  transform: scale(1.05);
+  border-color: rgba(56, 189, 248, 0.6);
+}
+
+.minimal-footer-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #ffffff 0%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.minimal-footer-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.minimal-footer-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Navigation Links */
+.minimal-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.minimal-footer-link {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  text-decoration: none;
+  transition: color 0.2s ease;
+  padding: 2px 0;
+}
+
+.minimal-footer-link:hover {
+  color: #38bdf8;
+}
+
+/* Subtle Divider */
+.minimal-footer-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 18px 0 14px;
+}
+
+/* Bottom Bar */
+.minimal-footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11.5px;
+  color: #475569;
+}
+
+.minimal-footer-copy {
+  margin: 0;
+  color: #64748b;
+}
+
+.minimal-footer-network {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  letter-spacing: 0.3px;
+}
+
+.minimal-footer-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #0ea5e9;
+  box-shadow: 0 0 6px #0ea5e9;
+}
+
+/* ========================================================
+   Responsive Breakpoints
+   ======================================================== */
+@media (max-width: 768px) {
+  .minimal-footer-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .minimal-footer-sep {
+    display: none;
+  }
+
+  .minimal-footer-brand {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .minimal-footer-links {
+    gap: 18px;
+  }
+
+  .minimal-footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}

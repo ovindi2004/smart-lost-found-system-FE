@@ -1,13 +1,32 @@
 :root {
-  color-scheme: light;
-  font-family: "Instrument Sans", system-ui, sans-serif;
-  color: #0e2237;
-  background: #f1f4f6;
+  color-scheme: dark;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  color: #f1f5f9;
+  background: #020617;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
-*, *::before, *::after { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
-h1, h2, h3, p { margin: 0; }
-button, input, select, textarea { font: inherit; }
-a { color: inherit; text-decoration: none; }
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #020617;
+  color: #f1f5f9;
+}
+
+h1, h2, h3, h4, p {
+  margin: 0;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
